@@ -97,3 +97,17 @@
   - Use `checkout_data.custom.customer_id` to link checkout to existing LS customer
   - Use `custom_data.userId` to pass userId for webhook correlation
 ---
+
+## 2026-04-10 - US-006
+- Added server endpoint stubs for all 7 subscription client methods: create (existing), cancel, resume, update, list, get, portal
+- Client plugin uses `$InferServerPlugin` to auto-infer all typed methods from server endpoints — no manual client method definitions needed
+- Each endpoint stub includes authentication via `sessionMiddleware`, ownership verification, and proper Zod input schemas
+- GET endpoints (list, get) use `query` parameter; POST endpoints (cancel, resume, update, portal) use `body` parameter
+- Files changed: `src/index.ts`
+- **Learnings for future iterations:**
+  - `$InferServerPlugin` automatically generates client methods from all server endpoints — just define the endpoint with proper types
+  - GET endpoints in better-auth use `query: z.object({})` for query parameter validation, accessed via `ctx.query`
+  - POST endpoints use `body: z.object({})`, accessed via `ctx.body`
+  - Endpoint stubs with basic validation (ownership checks, not-found) provide working scaffolding for later stories to fill in API calls
+  - The endpoint key name (e.g., `lemonSqueezySubscriptionCancel`) determines the client method name
+---

@@ -1,6 +1,13 @@
 import type { BetterAuthPlugin } from "better-auth";
+import { createAuthEndpoint } from "better-auth/api";
 import { schema } from "./schema";
 import type { LemonSqueezyOptions } from "./types";
+import {
+	verifyWebhookSignature,
+	processWebhookEvent,
+	HANDLED_EVENTS,
+	type WebhookContext,
+} from "./webhook";
 
 export type { LemonSqueezyOptions } from "./types";
 export type {
@@ -101,6 +108,57 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 				},
 			};
 		},
-		endpoints: {},
+		endpoints: {
+			lemonSqueezyWebhook: createAuthEndpoint(
+				"/lemonsqueezy/webhook",
+				{
+					method: "POST",
+					requireRequest: true,
+					metadata: {
+						SERVER_ONLY: true,
+					},
+				},
+				async (ctx) => {
+					const request = ctx.request;
+					if (!request) {
+						throw new Error("Request object is required");
+					}
+
+					const rawBody = await request.text();
+					const signature = request.headers.get("x-signature") ?? "";
+
+					// Verify webhook signature
+					const isValid = await verifyWebhookSignature(
+						rawBody,
+						signature,
+						options.webhookSecret,
+					);
+					if (!isValid) {
+						return ctx.json(
+							{ error: "Invalid signature" },
+							{ status: 400 },
+						);
+					}
+
+					const payload = JSON.parse(rawBody) as Record<string, unknown>;
+					const meta = payload.meta as
+						| Record<string, unknown>
+						| undefined;
+					const eventName = (meta?.event_name as string) ?? "";
+
+					// Build webhook context
+					const webhookCtx: WebhookContext = {
+						adapter: ctx.context.adapter,
+						internalAdapter: ctx.context.internalAdapter,
+						logger: ctx.context.logger,
+						options,
+					};
+
+					await processWebhookEvent(webhookCtx, eventName, payload);
+
+					return ctx.json({ success: true });
+				},
+			),
+		},
 	} satisfies BetterAuthPlugin;
 };

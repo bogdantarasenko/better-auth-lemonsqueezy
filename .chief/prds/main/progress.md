@@ -111,3 +111,17 @@
   - Endpoint stubs with basic validation (ownership checks, not-found) provide working scaffolding for later stories to fill in API calls
   - The endpoint key name (e.g., `lemonSqueezySubscriptionCancel`) determines the client method name
 ---
+
+## 2026-04-10 - US-007
+- Implemented POST /lemonsqueezy/subscription/cancel with full Lemon Squeezy API integration
+- Idempotency: if subscription already has `cancelled` status, returns success without API call
+- Calls LS API PATCH /v1/subscriptions/{id} with `{ cancelled: true }` (cancels at period end)
+- Does NOT update local lsSubscription status — webhook is the source of truth
+- Ownership verification and not-found checks preserved from stub
+- Files changed: `src/index.ts`
+- **Learnings for future iterations:**
+  - Lemon Squeezy PATCH /v1/subscriptions/{id} uses JSON:API format with `data.type`, `data.id`, `data.attributes`
+  - Cancel sets `cancelled: true` in attributes — LS cancels at period end, not immediately
+  - Resume sets `cancelled: false` — same PATCH endpoint, opposite attribute value
+  - Local status should NOT be updated by cancel/resume endpoints — webhook events are the source of truth
+---

@@ -5,6 +5,7 @@
 - All types exported from `src/types.ts`, re-exported from `src/index.ts`
 - Schema defined in `src/schema.ts` with `lsCustomer` and `lsSubscription` tables
 - Use `index: true` on schema fields for database indexes (not automatic from `references`)
+- Access control helpers use `createAccessControlHelpers(adapter)` factory pattern — accepts raw adapter or `{ options: { adapter } }`
 - Server entry: `src/index.ts`, Client entry: `src/client.ts`
 - `init(ctx)` receives AuthContext — use `ctx.adapter` for DB operations and `ctx.logger` for logging
 - `databaseHooks` go inside `init()` return: `{ options: { databaseHooks: { user: { create: { after(user) {} } } } } }`
@@ -166,4 +167,19 @@
   - Stub endpoints from US-006 were already functionally complete — US-010 was mostly a verification pass
   - GET endpoints use `query: z.object({})` and `ctx.query` for parameters
   - The adapter's `findMany` returns all records matching the where clause — no built-in pagination
+---
+
+## 2026-04-10 - US-011
+- Implemented plan-based access control helpers via `createAccessControlHelpers()` factory function
+- `hasActiveSubscription(userId)` — returns true if user has any subscription with status `active` or `on_trial`
+- `hasActivePlan(userId, planName)` — returns true if user has an active subscription for the given plan
+- `requirePlan(userId, planName)` — returns `{ allowed: boolean, subscription? }` for gating logic
+- Factory accepts either a raw adapter (with `findMany`) or an auth-like object with `options.adapter`
+- All helpers query local `lsSubscription` table only — no Lemon Squeezy API calls
+- Exported from `src/index.ts` alongside existing type exports
+- Files changed: `src/access-control.ts` (new), `src/index.ts`
+- **Learnings for future iterations:**
+  - Access control helpers need database access but should be framework-agnostic — use a factory pattern that accepts an adapter
+  - Accept a union type `Adapter | { options: { adapter: Adapter } }` to support both raw adapter and auth instance patterns
+  - Active subscription statuses for access control: `active` and `on_trial` only
 ---

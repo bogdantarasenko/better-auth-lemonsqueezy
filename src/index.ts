@@ -672,7 +672,6 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					}),
 				},
 				async (ctx) => {
-					// Full implementation in US-010
 					const userId = ctx.context.session.user.id;
 
 					const subscriptions = (await ctx.context.adapter.findMany({
@@ -694,7 +693,6 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					}),
 				},
 				async (ctx) => {
-					// Full implementation in US-010
 					const userId = ctx.context.session.user.id;
 					const subscriptionId = ctx.query.subscriptionId;
 

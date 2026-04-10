@@ -154,3 +154,16 @@
   - Plan changes in LS arrive as `subscription_updated` events (not a distinct `subscription_plan_changed` event)
   - The update endpoint follows the exact same pattern as cancel/resume: ownership check → idempotency guard → LS API PATCH → no local update
 ---
+
+## 2026-04-10 - US-010
+- Finalized GET /lemonsqueezy/subscription/list and GET /lemonsqueezy/subscription/get endpoints
+- Both endpoints were scaffolded in US-006; this story removed placeholder comments and verified full implementation
+- List: returns `{ subscriptions: [...], cursor: null }` with optional cursor query param (ignored in v1)
+- Get: accepts subscriptionId query param, returns single subscription with ownership verification
+- Error codes: "subscription_not_found" (404) and "not_owner" (403)
+- Files changed: `src/index.ts`
+- **Learnings for future iterations:**
+  - Stub endpoints from US-006 were already functionally complete — US-010 was mostly a verification pass
+  - GET endpoints use `query: z.object({})` and `ctx.query` for parameters
+  - The adapter's `findMany` returns all records matching the where clause — no built-in pagination
+---

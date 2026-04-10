@@ -482,7 +482,6 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					}),
 				},
 				async (ctx) => {
-					// Full implementation in US-008
 					const userId = ctx.context.session.user.id;
 					const subscriptionId = ctx.body.subscriptionId;
 
@@ -504,7 +503,56 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 						);
 					}
 
-					return ctx.json({ success: true });
+					// Only cancelled subscriptions can be resumed
+					if (subscription.status !== "cancelled" && subscription.status !== "active") {
+						return ctx.json(
+							{ error: "Subscription cannot be resumed", code: "invalid_status" },
+							{ status: 400 },
+						);
+					}
+
+					// Idempotency: if already active, return success without API call
+					if (subscription.status === "active") {
+						return ctx.json({
+							success: true,
+							message: "Subscription is already active.",
+						});
+					}
+
+					// Call Lemon Squeezy API to resume (un-cancel)
+					const resumeResponse = await fetch(
+						`https://api.lemonsqueezy.com/v1/subscriptions/${subscriptionId}`,
+						{
+							method: "PATCH",
+							headers: {
+								Authorization: `Bearer ${options.apiKey}`,
+								Accept: "application/vnd.api+json",
+								"Content-Type": "application/vnd.api+json",
+							},
+							body: JSON.stringify({
+								data: {
+									type: "subscriptions",
+									id: subscriptionId,
+									attributes: {
+										cancelled: false,
+									},
+								},
+							}),
+						},
+					);
+
+					if (!resumeResponse.ok) {
+						const errorText = await resumeResponse.text();
+						throw new Error(
+							`Lemon Squeezy resume failed: ${resumeResponse.status} ${errorText}`,
+						);
+					}
+
+					// Do NOT update local status — webhook is the source of truth
+					return ctx.json({
+						success: true,
+						message: "Subscription resume requested.",
+					});
 				},
 			),
 

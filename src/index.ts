@@ -729,7 +729,6 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					}),
 				},
 				async (ctx) => {
-					// Full implementation in US-012
 					const userId = ctx.context.session.user.id;
 					const subscriptionId = ctx.body.subscriptionId;
 
@@ -751,7 +750,31 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 						);
 					}
 
-					return ctx.json({ url: "" });
+					// Fetch fresh subscription from Lemon Squeezy API to get portal URL
+					const lsResponse = await fetch(
+						`https://api.lemonsqueezy.com/v1/subscriptions/${subscriptionId}`,
+						{
+							method: "GET",
+							headers: {
+								Authorization: `Bearer ${options.apiKey}`,
+								Accept: "application/vnd.api+json",
+							},
+						},
+					);
+
+					if (!lsResponse.ok) {
+						const errorText = await lsResponse.text();
+						throw new Error(
+							`Lemon Squeezy portal fetch failed: ${lsResponse.status} ${errorText}`,
+						);
+					}
+
+					const lsResult = (await lsResponse.json()) as {
+						data: { attributes: { urls: { customer_portal: string } } };
+					};
+					const portalUrl = lsResult.data.attributes.urls.customer_portal;
+
+					return ctx.json({ url: portalUrl });
 				},
 			),
 		},

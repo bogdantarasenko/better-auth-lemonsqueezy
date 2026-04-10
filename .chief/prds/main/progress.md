@@ -125,3 +125,17 @@
   - Resume sets `cancelled: false` — same PATCH endpoint, opposite attribute value
   - Local status should NOT be updated by cancel/resume endpoints — webhook events are the source of truth
 ---
+
+## 2026-04-10 - US-008
+- Implemented POST /lemonsqueezy/subscription/resume with full Lemon Squeezy API integration
+- Verifies subscription belongs to authenticated user and status is cancelled
+- Idempotency: if subscription already has `active` status, returns success without API call
+- Rejects non-cancelled/non-active statuses with `invalid_status` error
+- Calls LS API PATCH /v1/subscriptions/{id} with `{ cancelled: false }` to un-cancel
+- Does NOT update local lsSubscription status — webhook is the source of truth
+- Files changed: `src/index.ts`
+- **Learnings for future iterations:**
+  - Resume is the mirror of cancel — same PATCH endpoint, `cancelled: false` instead of `true`
+  - Guard both `cancelled` and `active` statuses for resume: cancelled is the expected state, active is the idempotent shortcut
+  - Pattern: cancel/resume/update endpoints follow identical structure — ownership check, idempotency guard, LS API call, no local update
+---

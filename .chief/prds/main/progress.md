@@ -8,6 +8,7 @@
 - Server entry: `src/index.ts`, Client entry: `src/client.ts`
 - `init(ctx)` receives AuthContext — use `ctx.adapter` for DB operations and `ctx.logger` for logging
 - `databaseHooks` go inside `init()` return: `{ options: { databaseHooks: { user: { create: { after(user) {} } } } } }`
+- Use `sessionMiddleware` from `better-auth/api` in `use: [sessionMiddleware]` for authenticated endpoints — ensures `ctx.context.session` is non-null
 - Lemon Squeezy API uses JSON:API spec — requests need `application/vnd.api+json` content type
 - Lemon Squeezy customer creation: POST /v1/customers with data.relationships.store for store linking
 - Endpoints use `createAuthEndpoint(path, { method, requireRequest?, metadata? }, handler)` from `better-auth/api`
@@ -78,4 +79,21 @@
   - `ctx.request.text()` gives raw body for signature verification (use `requireRequest: true`)
   - Payment events (subscription_payment_*) should NOT create/update subscription records — only conditional status changes
   - LS event `subscription_unpaused` (not `subscription_resumed`) — preserve original event name
+---
+
+## 2026-04-10 - US-005
+- Implemented POST /lemonsqueezy/subscription/create endpoint with authenticated session via `sessionMiddleware`
+- Accepts plan, optional interval (defaults to first key), optional successUrl/cancelUrl (falls back to config defaults)
+- On-demand customer creation if no lsCustomer record exists, with insert-or-ignore for concurrency
+- Idempotency: in-memory lock per userId+plan+interval key, 60s checkout URL cache
+- Validates plan exists, interval is valid, no active subscription for same plan
+- Generates Lemon Squeezy checkout URL via API with customer linking and userId in custom_data
+- Extracted `createLsCustomer()` helper to reuse between sign-up hook and checkout flow
+- Files changed: `src/index.ts`
+- **Learnings for future iterations:**
+  - `sessionMiddleware` from `better-auth/api` ensures `ctx.context.session` is non-null — add to `use: [sessionMiddleware]` in endpoint options
+  - Lemon Squeezy checkout API: POST /v1/checkouts with relationships for store + variant, attributes for checkout_data, custom_data, product_options, checkout_options
+  - The checkout URL is at `data.attributes.url` in the response
+  - Use `checkout_data.custom.customer_id` to link checkout to existing LS customer
+  - Use `custom_data.userId` to pass userId for webhook correlation
 ---

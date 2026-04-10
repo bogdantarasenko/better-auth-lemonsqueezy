@@ -1,5 +1,6 @@
 import type { BetterAuthPlugin } from "better-auth";
-import { createAuthEndpoint } from "better-auth/api";
+import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
+import { z } from "zod";
 import { schema } from "./schema";
 import type { LemonSqueezyOptions } from "./types";
 import {
@@ -20,6 +21,56 @@ export type {
 	WebhookEventPayload,
 } from "./types";
 
+/** In-memory checkout cache: key -> { url, expiresAt } */
+const checkoutCache = new Map<string, { url: string; expiresAt: number }>();
+
+/** In-memory checkout locks: key -> Promise that resolves with the checkout URL */
+const checkoutLocks = new Map<string, Promise<string>>();
+
+/**
+ * Create a Lemon Squeezy customer via API.
+ * Returns the customer ID string.
+ */
+async function createLsCustomer(
+	apiKey: string,
+	storeId: string,
+	email: string,
+	name: string,
+): Promise<string> {
+	const response = await fetch(
+		"https://api.lemonsqueezy.com/v1/customers",
+		{
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${apiKey}`,
+				Accept: "application/vnd.api+json",
+				"Content-Type": "application/vnd.api+json",
+			},
+			body: JSON.stringify({
+				data: {
+					type: "customers",
+					attributes: { name, email },
+					relationships: {
+						store: {
+							data: { type: "stores", id: storeId },
+						},
+					},
+				},
+			}),
+		},
+	);
+
+	if (!response.ok) {
+		const errorText = await response.text();
+		throw new Error(
+			`Failed to create LS customer: ${response.status} ${errorText}`,
+		);
+	}
+
+	const result = (await response.json()) as { data: { id: string } };
+	return result.data.id;
+}
+
 export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 	return {
 		id: "lemonsqueezy",
@@ -34,48 +85,12 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 									if (!options.createCustomerOnSignUp || !user) return;
 
 									try {
-										const response = await fetch(
-											"https://api.lemonsqueezy.com/v1/customers",
-											{
-												method: "POST",
-												headers: {
-													Authorization: `Bearer ${options.apiKey}`,
-													Accept: "application/vnd.api+json",
-													"Content-Type": "application/vnd.api+json",
-												},
-												body: JSON.stringify({
-													data: {
-														type: "customers",
-														attributes: {
-															name: user.name,
-															email: user.email,
-														},
-														relationships: {
-															store: {
-																data: {
-																	type: "stores",
-																	id: options.storeId,
-																},
-															},
-														},
-													},
-												}),
-											},
+										const lsCustomerId = await createLsCustomer(
+											options.apiKey,
+											options.storeId,
+											user.email,
+											user.name,
 										);
-
-										if (!response.ok) {
-											const errorText = await response.text();
-											ctx.logger.error(
-												"Failed to create Lemon Squeezy customer",
-												{ status: response.status, body: errorText },
-											);
-											return;
-										}
-
-										const result = (await response.json()) as {
-											data: { id: string };
-										};
-										const lsCustomerId = result.data.id;
 
 										const now = new Date();
 										await ctx.adapter.create({
@@ -157,6 +172,226 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					await processWebhookEvent(webhookCtx, eventName, payload);
 
 					return ctx.json({ success: true });
+				},
+			),
+
+			lemonSqueezySubscriptionCreate: createAuthEndpoint(
+				"/lemonsqueezy/subscription/create",
+				{
+					method: "POST",
+					use: [sessionMiddleware],
+					body: z.object({
+						plan: z.string(),
+						interval: z.string().optional(),
+						successUrl: z.string().optional(),
+						cancelUrl: z.string().optional(),
+					}),
+				},
+				async (ctx) => {
+					const userId = ctx.context.session.user.id;
+					const userEmail = ctx.context.session.user.email;
+					const userName = ctx.context.session.user.name;
+
+					const { plan: planName, interval: requestedInterval, successUrl: bodySuccessUrl, cancelUrl: bodyCancelUrl } = ctx.body;
+
+					// Resolve plan from config
+					const plans = options.subscription?.plans ?? [];
+					const plan = plans.find((p) => p.name === planName);
+					if (!plan) {
+						return ctx.json(
+							{ error: "Plan not found", code: "plan_not_found" },
+							{ status: 400 },
+						);
+					}
+
+					// Resolve interval — default to first key in plan.intervals
+					const intervalKeys = Object.keys(plan.intervals) as Array<string>;
+					const interval = requestedInterval ?? intervalKeys[0];
+					if (!interval) {
+						return ctx.json(
+							{ error: "No intervals configured for plan", code: "no_intervals" },
+							{ status: 400 },
+						);
+					}
+
+					const variantId = plan.intervals[interval as keyof typeof plan.intervals];
+					if (!variantId) {
+						return ctx.json(
+							{ error: "Invalid interval for plan", code: "invalid_interval" },
+							{ status: 400 },
+						);
+					}
+
+					// Resolve success/cancel URLs
+					const successUrl = bodySuccessUrl ?? options.defaultSuccessUrl;
+					const cancelUrl = bodyCancelUrl ?? options.defaultCancelUrl;
+					if (!successUrl || !cancelUrl) {
+						return ctx.json(
+							{ error: "Missing successUrl or cancelUrl", code: "missing_url" },
+							{ status: 400 },
+						);
+					}
+
+					// Check for existing active subscription for this plan
+					const existingSubs = await ctx.context.adapter.findMany({
+						model: "lsSubscription",
+						where: [{ field: "userId", value: userId }],
+					});
+					const activeSamePlan = (existingSubs as Array<Record<string, unknown>>).find(
+						(s) =>
+							s.planName === planName &&
+							(s.status === "active" || s.status === "on_trial"),
+					);
+					if (activeSamePlan) {
+						return ctx.json(
+							{ error: "User already has an active subscription for this plan", code: "already_subscribed" },
+							{ status: 400 },
+						);
+					}
+
+					// Idempotency: derive key from userId + plan + interval
+					const idempotencyKey = `${userId}:${planName}:${interval}`;
+
+					// Check cache first
+					const cached = checkoutCache.get(idempotencyKey);
+					if (cached && cached.expiresAt > Date.now()) {
+						return ctx.json({ url: cached.url });
+					}
+
+					// Check if there's an in-flight request for this key
+					const existingLock = checkoutLocks.get(idempotencyKey);
+					if (existingLock) {
+						const url = await existingLock;
+						return ctx.json({ url });
+					}
+
+					// Create a new lock
+					let resolveLock: (url: string) => void;
+					let rejectLock: (err: unknown) => void;
+					const lockPromise = new Promise<string>((resolve, reject) => {
+						resolveLock = resolve;
+						rejectLock = reject;
+					});
+					checkoutLocks.set(idempotencyKey, lockPromise);
+
+					try {
+						// Ensure customer exists
+						let customerRecord = await ctx.context.adapter.findOne({
+							model: "lsCustomer",
+							where: [{ field: "userId", value: userId }],
+						}) as Record<string, unknown> | null;
+
+						if (!customerRecord) {
+							// Create customer on-demand
+							const lsCustomerId = await createLsCustomer(
+								options.apiKey,
+								options.storeId,
+								userEmail,
+								userName,
+							);
+
+							const now = new Date();
+							try {
+								customerRecord = await ctx.context.adapter.create({
+									model: "lsCustomer",
+									data: {
+										userId,
+										lsCustomerId,
+										email: userEmail,
+										createdAt: now,
+										updatedAt: now,
+									},
+								}) as Record<string, unknown>;
+							} catch {
+								// Insert-or-ignore: if unique constraint fails (concurrent creation),
+								// fetch the existing record
+								customerRecord = await ctx.context.adapter.findOne({
+									model: "lsCustomer",
+									where: [{ field: "userId", value: userId }],
+								}) as Record<string, unknown> | null;
+								if (!customerRecord) {
+									throw new Error("Failed to create or find customer record");
+								}
+							}
+						}
+
+						const lsCustomerId = customerRecord.lsCustomerId as string;
+
+						// Generate Lemon Squeezy checkout URL
+						const checkoutResponse = await fetch(
+							"https://api.lemonsqueezy.com/v1/checkouts",
+							{
+								method: "POST",
+								headers: {
+									Authorization: `Bearer ${options.apiKey}`,
+									Accept: "application/vnd.api+json",
+									"Content-Type": "application/vnd.api+json",
+								},
+								body: JSON.stringify({
+									data: {
+										type: "checkouts",
+										attributes: {
+											checkout_data: {
+												email: userEmail,
+												custom: {
+													customer_id: lsCustomerId,
+												},
+											},
+											custom_data: {
+												userId,
+											},
+											product_options: {
+												redirect_url: successUrl,
+											},
+											checkout_options: {
+												cancel_url: cancelUrl,
+											},
+										},
+										relationships: {
+											store: {
+												data: {
+													type: "stores",
+													id: options.storeId,
+												},
+											},
+											variant: {
+												data: {
+													type: "variants",
+													id: variantId,
+												},
+											},
+										},
+									},
+								}),
+							},
+						);
+
+						if (!checkoutResponse.ok) {
+							const errorText = await checkoutResponse.text();
+							throw new Error(
+								`Lemon Squeezy checkout failed: ${checkoutResponse.status} ${errorText}`,
+							);
+						}
+
+						const checkoutResult = (await checkoutResponse.json()) as {
+							data: { attributes: { url: string } };
+						};
+						const checkoutUrl = checkoutResult.data.attributes.url;
+
+						// Cache for 60 seconds
+						checkoutCache.set(idempotencyKey, {
+							url: checkoutUrl,
+							expiresAt: Date.now() + 60_000,
+						});
+
+						resolveLock!(checkoutUrl);
+						return ctx.json({ url: checkoutUrl });
+					} catch (error) {
+						rejectLock!(error);
+						throw error;
+					} finally {
+						checkoutLocks.delete(idempotencyKey);
+					}
 				},
 			),
 		},

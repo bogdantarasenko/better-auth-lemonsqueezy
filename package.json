@@ -43,6 +43,7 @@
     "vitest": "^3.0.0",
     "zod": "^3.24.0"
   },
+  "files": ["dist", "src", "README.md"],
   "license": "MIT",
   "keywords": ["better-auth", "lemonsqueezy", "lemon-squeezy", "subscription", "payments"]
 }

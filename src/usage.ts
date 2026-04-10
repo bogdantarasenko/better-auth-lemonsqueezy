@@ -65,6 +65,7 @@ async function reportUsage(
 						type: "usage-records",
 						attributes: {
 							quantity,
+							action: "increment",
 						},
 						relationships: {
 							"subscription-item": {
@@ -108,10 +109,10 @@ export function createUsageReporter(
 	adapterOrAuth: Adapter | { options: { adapter: Adapter } },
 	apiKey: string,
 ) {
-	const adapter =
-		"options" in adapterOrAuth
-			? adapterOrAuth.options.adapter
-			: adapterOrAuth;
+	const adapter: Adapter =
+		"findOne" in adapterOrAuth
+			? adapterOrAuth
+			: adapterOrAuth.options.adapter;
 
 	return (
 		userId: string,

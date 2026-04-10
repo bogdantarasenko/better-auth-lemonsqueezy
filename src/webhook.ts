@@ -1,26 +1,44 @@
 import type { LemonSqueezyOptions, SubscriptionStatus } from "./types";
 
 /**
- * Verify the webhook signature using HMAC SHA-256.
+ * Verify the webhook signature using HMAC SHA-256 with constant-time comparison.
  */
 export async function verifyWebhookSignature(
 	rawBody: string,
 	signature: string,
 	secret: string,
 ): Promise<boolean> {
+	if (!signature) return false;
+
 	const encoder = new TextEncoder();
 	const key = await crypto.subtle.importKey(
 		"raw",
 		encoder.encode(secret),
 		{ name: "HMAC", hash: "SHA-256" },
 		false,
-		["sign"],
+		["sign", "verify"],
 	);
-	const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(rawBody));
-	const hexDigest = Array.from(new Uint8Array(sig))
-		.map((b) => b.toString(16).padStart(2, "0"))
-		.join("");
-	return hexDigest === signature;
+
+	// Convert the hex signature to a Uint8Array for constant-time verification
+	const sigBytes = hexToBytes(signature);
+	if (!sigBytes) return false;
+
+	return crypto.subtle.verify(
+		"HMAC",
+		key,
+		sigBytes as BufferSource,
+		encoder.encode(rawBody),
+	);
+}
+
+/** Convert a hex string to Uint8Array. Returns null if invalid hex. */
+function hexToBytes(hex: string): Uint8Array | null {
+	if (hex.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(hex)) return null;
+	const bytes = new Uint8Array(hex.length / 2);
+	for (let i = 0; i < hex.length; i += 2) {
+		bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+	}
+	return bytes;
 }
 
 /**
@@ -119,12 +137,11 @@ export async function resolveUserId(
 
 	// 2. Look up by lsCustomerId
 	const attributes = data.data as Record<string, unknown> | undefined;
-	const lsCustomerId = String(
-		attributes?.attributes
-			? (attributes.attributes as Record<string, unknown>).customer_id
-			: "",
-	);
-	if (lsCustomerId) {
+	const rawCustomerId = attributes?.attributes
+		? (attributes.attributes as Record<string, unknown>).customer_id
+		: undefined;
+	if (rawCustomerId != null && rawCustomerId !== "") {
+		const lsCustomerId = String(rawCustomerId);
 		const customer = await ctx.adapter.findOne({
 			model: "lsCustomer",
 			where: [{ field: "lsCustomerId", value: lsCustomerId }],

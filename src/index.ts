@@ -22,6 +22,7 @@ export type {
 } from "./types";
 export { createAccessControlHelpers } from "./access-control";
 export { createUsageReporter } from "./usage";
+export { schema } from "./schema";
 
 /** Default timeout for outbound Lemon Squeezy API requests (10 seconds) */
 const LS_API_TIMEOUT = 10_000;
@@ -85,11 +86,43 @@ async function lsFetch(
 	}
 }
 
-/** In-memory checkout cache: key -> { url, expiresAt } */
+/**
+ * Simple per-user rate limiter (best-effort, in-memory).
+ * Allows `maxRequests` per `windowMs` per user.
+ */
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQUESTS = 30;
+
+function checkRateLimit(userId: string): boolean {
+	const now = Date.now();
+	const entry = rateLimitMap.get(userId);
+	if (!entry || entry.resetAt <= now) {
+		rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+		return true;
+	}
+	entry.count++;
+	return entry.count <= RATE_LIMIT_MAX_REQUESTS;
+}
+
+/**
+ * In-memory checkout cache: key -> { url, expiresAt }.
+ * Best-effort deduplication — not shared across serverless instances.
+ */
 const checkoutCache = new Map<string, { url: string; expiresAt: number }>();
 
 /** In-memory checkout locks: key -> Promise that resolves with the checkout URL */
 const checkoutLocks = new Map<string, Promise<string>>();
+
+/** Evict expired entries from the checkout cache (called before each lookup). */
+function pruneCheckoutCache() {
+	const now = Date.now();
+	for (const [key, entry] of checkoutCache) {
+		if (entry.expiresAt <= now) {
+			checkoutCache.delete(key);
+		}
+	}
+}
 
 /**
  * Create a Lemon Squeezy customer via API.
@@ -225,7 +258,15 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 						);
 					}
 
-					const payload = JSON.parse(rawBody) as Record<string, unknown>;
+					let payload: Record<string, unknown>;
+				try {
+					payload = JSON.parse(rawBody) as Record<string, unknown>;
+				} catch {
+					return ctx.json(
+						{ error: "Invalid JSON body", code: "invalid_body" },
+						{ status: 400 },
+					);
+				}
 					const meta = payload.meta as
 						| Record<string, unknown>
 						| undefined;
@@ -239,7 +280,18 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 						options,
 					};
 
-					await processWebhookEvent(webhookCtx, eventName, payload);
+					try {
+						await processWebhookEvent(webhookCtx, eventName, payload);
+					} catch (error) {
+						ctx.context.logger.error(
+							"Webhook processing failed",
+							{ eventName, error },
+						);
+						return ctx.json(
+							{ error: "Webhook processing failed", code: "processing_error" },
+							{ status: 500 },
+						);
+					}
 
 					return ctx.json({ success: true });
 				},
@@ -252,13 +304,19 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					use: [sessionMiddleware],
 					body: z.object({
 						plan: z.string(),
-						interval: z.string().optional(),
+						interval: z.enum(["monthly", "annual"]).optional(),
 						successUrl: z.string().optional(),
 						cancelUrl: z.string().optional(),
 					}),
 				},
 				async (ctx) => {
 					const userId = ctx.context.session.user.id;
+					if (!checkRateLimit(userId)) {
+						return ctx.json(
+							{ error: "Too many requests", code: "rate_limited" },
+							{ status: 429 },
+						);
+					}
 					const userEmail = ctx.context.session.user.email;
 					const userName = ctx.context.session.user.name;
 
@@ -293,9 +351,9 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					}
 
 					// Resolve success/cancel URLs
-					const successUrl = bodySuccessUrl ?? options.defaultSuccessUrl;
-					const cancelUrl = bodyCancelUrl ?? options.defaultCancelUrl;
-					if (!successUrl || !cancelUrl) {
+					const resolvedSuccessUrl = bodySuccessUrl ?? options.defaultSuccessUrl;
+					const resolvedCancelUrl = bodyCancelUrl ?? options.defaultCancelUrl;
+					if (!resolvedSuccessUrl || !resolvedCancelUrl) {
 						return ctx.json(
 							{ error: "Missing successUrl or cancelUrl", code: "missing_url" },
 							{ status: 400 },
@@ -319,10 +377,11 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 						);
 					}
 
-					// Idempotency: derive key from userId + plan + interval
-					const idempotencyKey = `${userId}:${planName}:${interval}`;
+					// Idempotency: derive key from userId + plan + interval + URLs
+					const idempotencyKey = `${userId}:${planName}:${interval}:${resolvedSuccessUrl}:${resolvedCancelUrl}`;
 
-					// Check cache first
+					// Check cache first (prune expired entries)
+					pruneCheckoutCache();
 					const cached = checkoutCache.get(idempotencyKey);
 					if (cached && cached.expiresAt > Date.now()) {
 						return ctx.json({ url: cached.url });
@@ -331,8 +390,12 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					// Check if there's an in-flight request for this key
 					const existingLock = checkoutLocks.get(idempotencyKey);
 					if (existingLock) {
-						const url = await existingLock;
-						return ctx.json({ url });
+						try {
+							const url = await existingLock;
+							return ctx.json({ url });
+						} catch {
+							// The in-flight request failed — fall through to create a new one
+						}
 					}
 
 					// Create a new lock
@@ -361,7 +424,8 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 							);
 
 							if (customerResult.error || !customerResult.customerId) {
-								resolveLock!("");
+								const err = new Error(customerResult.error ?? "Failed to create customer");
+								rejectLock!(err);
 								return ctx.json(
 									{ error: customerResult.error ?? "Failed to create customer", code: customerResult.code ?? "upstream_error" },
 									{ status: 502 },
@@ -389,7 +453,8 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 									where: [{ field: "userId", value: userId }],
 								}) as Record<string, unknown> | null;
 								if (!customerRecord) {
-									resolveLock!("");
+									const err = new Error("Failed to create or find customer record");
+									rejectLock!(err);
 									return ctx.json(
 										{ error: "Failed to create or find customer record", code: "upstream_error" },
 										{ status: 500 },
@@ -399,6 +464,15 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 						}
 
 						const lsCustomerId = customerRecord.lsCustomerId as string;
+
+						// Keep customer email in sync with session
+						if (customerRecord.email !== userEmail) {
+							await ctx.context.adapter.update({
+								model: "lsCustomer",
+								update: { email: userEmail, updatedAt: new Date() },
+								where: [{ field: "userId", value: userId }],
+							});
+						}
 
 						// Generate Lemon Squeezy checkout URL
 						const checkoutResult = await lsFetch(
@@ -424,10 +498,10 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 												userId,
 											},
 											product_options: {
-												redirect_url: successUrl,
+												redirect_url: resolvedSuccessUrl,
 											},
 											checkout_options: {
-												cancel_url: cancelUrl,
+												cancel_url: resolvedCancelUrl,
 											},
 										},
 										relationships: {
@@ -450,7 +524,8 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 						);
 
 						if (checkoutResult.error) {
-							resolveLock!("");
+							const err = new Error(checkoutResult.error);
+							rejectLock!(err);
 							return ctx.json(
 								{ error: checkoutResult.error, code: checkoutResult.code ?? "upstream_error" },
 								{ status: checkoutResult.code === "rate_limited" ? 429 : 502 },
@@ -489,6 +564,12 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 				},
 				async (ctx) => {
 					const userId = ctx.context.session.user.id;
+					if (!checkRateLimit(userId)) {
+						return ctx.json(
+							{ error: "Too many requests", code: "rate_limited" },
+							{ status: 429 },
+						);
+					}
 					const subscriptionId = ctx.body.subscriptionId;
 
 					const subscription = (await ctx.context.adapter.findOne({
@@ -567,6 +648,12 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 				},
 				async (ctx) => {
 					const userId = ctx.context.session.user.id;
+					if (!checkRateLimit(userId)) {
+						return ctx.json(
+							{ error: "Too many requests", code: "rate_limited" },
+							{ status: 429 },
+						);
+					}
 					const subscriptionId = ctx.body.subscriptionId;
 
 					const subscription = (await ctx.context.adapter.findOne({
@@ -648,11 +735,17 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					body: z.object({
 						subscriptionId: z.string(),
 						plan: z.string(),
-						interval: z.string().optional(),
+						interval: z.enum(["monthly", "annual"]).optional(),
 					}),
 				},
 				async (ctx) => {
 					const userId = ctx.context.session.user.id;
+					if (!checkRateLimit(userId)) {
+						return ctx.json(
+							{ error: "Too many requests", code: "rate_limited" },
+							{ status: 429 },
+						);
+					}
 					const { subscriptionId, plan: planName, interval: requestedInterval } = ctx.body;
 
 					const subscription = (await ctx.context.adapter.findOne({
@@ -751,19 +844,22 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 				{
 					method: "GET",
 					use: [sessionMiddleware],
-					query: z.object({
-						cursor: z.string().optional(),
-					}),
 				},
 				async (ctx) => {
 					const userId = ctx.context.session.user.id;
+					if (!checkRateLimit(userId)) {
+						return ctx.json(
+							{ error: "Too many requests", code: "rate_limited" },
+							{ status: 429 },
+						);
+					}
 
 					const subscriptions = (await ctx.context.adapter.findMany({
 						model: "lsSubscription",
 						where: [{ field: "userId", value: userId }],
 					})) as Array<Record<string, unknown>>;
 
-					return ctx.json({ subscriptions, cursor: null });
+					return ctx.json({ subscriptions });
 				},
 			),
 
@@ -778,6 +874,12 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 				},
 				async (ctx) => {
 					const userId = ctx.context.session.user.id;
+					if (!checkRateLimit(userId)) {
+						return ctx.json(
+							{ error: "Too many requests", code: "rate_limited" },
+							{ status: 429 },
+						);
+					}
 					const subscriptionId = ctx.query.subscriptionId;
 
 					const subscription = (await ctx.context.adapter.findOne({
@@ -813,6 +915,12 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 				},
 				async (ctx) => {
 					const userId = ctx.context.session.user.id;
+					if (!checkRateLimit(userId)) {
+						return ctx.json(
+							{ error: "Too many requests", code: "rate_limited" },
+							{ status: 429 },
+						);
+					}
 					const subscriptionId = ctx.body.subscriptionId;
 
 					const subscription = (await ctx.context.adapter.findOne({
@@ -874,6 +982,12 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 						},
 						async (ctx) => {
 							const userId = ctx.context.session.user.id;
+							if (!checkRateLimit(userId)) {
+								return ctx.json(
+									{ error: "Too many requests", code: "rate_limited" },
+									{ status: 429 },
+								);
+							}
 							const { subscriptionId, quantity } = ctx.body;
 
 							// Validate quantity: must be a positive integer
@@ -947,6 +1061,7 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 											type: "usage-records",
 											attributes: {
 												quantity,
+												action: "increment",
 											},
 											relationships: {
 												"subscription-item": {

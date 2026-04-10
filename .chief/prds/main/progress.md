@@ -213,3 +213,23 @@
   - Lemon Squeezy usage records API: POST /v1/usage-records with `subscription-item` relationship (hyphenated, not camelCase)
   - `createUsageReporter()` returns a bound function — same factory pattern as access control helpers
 ---
+
+## 2026-04-10 - US-014
+- Implemented 40 unit tests covering all acceptance criteria in `src/webhook.test.ts`
+- Webhook signature verification: valid signature, invalid signature, empty signature, tampered body
+- Webhook event handling: subscription_created (create + upsert + subscriptionItemId), subscription_updated (status/dates + plan change detection), subscription_paused, subscription_unpaused, subscription_cancelled (with cancelledAt), subscription_expired
+- Payment events: payment_success (past_due→active, preserves on_trial), payment_failed (active→past_due, preserves cancelled), payment_recovered (unpaid→active), payment_refunded (no status change)
+- Stale event detection: skips older events
+- Unresolvable user: logs warning, invokes callback with resolved: false
+- User resolution priority: custom_data.userId > lsCustomerId lookup > email fallback (respects allowEmailFallback)
+- onWebhookEvent callback invocation with duplicatePlan flag
+- Access control helpers: hasActiveSubscription (active, on_trial, cancelled, none), hasActivePlan (matching, different plan, expired), requirePlan (allowed + subscription, not allowed)
+- Adapter patterns: accepts auth-like object with options.adapter
+- Plan resolution: resolvePlanFromVariant for known and unknown variants
+- Files changed: `src/webhook.test.ts` (new)
+- **Learnings for future iterations:**
+  - Vitest with in-memory mock adapters is effective for testing webhook and access control logic without database dependencies
+  - The `makeWebhookPayload` helper simplifies creating LS-format payloads for tests
+  - Mock adapter pattern (store as Record<string, Array<Record<string, unknown>>>) works well for findOne/findMany/create/update
+  - Test files are excluded from tsconfig via `"exclude": ["**/*.test.ts"]` so they don't affect build output
+---

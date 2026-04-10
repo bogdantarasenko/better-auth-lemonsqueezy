@@ -1,0 +1,50 @@
+{
+  "name": "@better-auth/lemonsqueezy",
+  "version": "0.1.0",
+  "description": "Lemon Squeezy plugin for Better Auth — subscription management, webhooks, and access control",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    },
+    "./client": {
+      "import": "./src/client.ts",
+      "types": "./src/client.ts"
+    }
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "import": "./dist/index.js",
+        "types": "./dist/index.d.ts"
+      },
+      "./client": {
+        "import": "./dist/client.js",
+        "types": "./dist/client.d.ts"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "better-auth": ">=1.2.0"
+  },
+  "devDependencies": {
+    "better-auth": "^1.2.9",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "zod": "^3.24.0"
+  },
+  "dependencies": {
+    "zod": "^3.24.0"
+  },
+  "license": "MIT",
+  "keywords": ["better-auth", "lemonsqueezy", "lemon-squeezy", "subscription", "payments"]
+}

@@ -394,6 +394,213 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					}
 				},
 			),
+			lemonSqueezySubscriptionCancel: createAuthEndpoint(
+				"/lemonsqueezy/subscription/cancel",
+				{
+					method: "POST",
+					use: [sessionMiddleware],
+					body: z.object({
+						subscriptionId: z.string(),
+					}),
+				},
+				async (ctx) => {
+					// Full implementation in US-007
+					const userId = ctx.context.session.user.id;
+					const subscriptionId = ctx.body.subscriptionId;
+
+					const subscription = (await ctx.context.adapter.findOne({
+						model: "lsSubscription",
+						where: [{ field: "lsSubscriptionId", value: subscriptionId }],
+					})) as Record<string, unknown> | null;
+
+					if (!subscription) {
+						return ctx.json(
+							{ error: "Subscription not found", code: "subscription_not_found" },
+							{ status: 404 },
+						);
+					}
+					if (subscription.userId !== userId) {
+						return ctx.json(
+							{ error: "Not authorized", code: "not_owner" },
+							{ status: 403 },
+						);
+					}
+
+					return ctx.json({
+						success: true,
+						message:
+							"Subscription cancellation requested. It will remain active until the end of the billing period.",
+					});
+				},
+			),
+
+			lemonSqueezySubscriptionResume: createAuthEndpoint(
+				"/lemonsqueezy/subscription/resume",
+				{
+					method: "POST",
+					use: [sessionMiddleware],
+					body: z.object({
+						subscriptionId: z.string(),
+					}),
+				},
+				async (ctx) => {
+					// Full implementation in US-008
+					const userId = ctx.context.session.user.id;
+					const subscriptionId = ctx.body.subscriptionId;
+
+					const subscription = (await ctx.context.adapter.findOne({
+						model: "lsSubscription",
+						where: [{ field: "lsSubscriptionId", value: subscriptionId }],
+					})) as Record<string, unknown> | null;
+
+					if (!subscription) {
+						return ctx.json(
+							{ error: "Subscription not found", code: "subscription_not_found" },
+							{ status: 404 },
+						);
+					}
+					if (subscription.userId !== userId) {
+						return ctx.json(
+							{ error: "Not authorized", code: "not_owner" },
+							{ status: 403 },
+						);
+					}
+
+					return ctx.json({ success: true });
+				},
+			),
+
+			lemonSqueezySubscriptionUpdate: createAuthEndpoint(
+				"/lemonsqueezy/subscription/update",
+				{
+					method: "POST",
+					use: [sessionMiddleware],
+					body: z.object({
+						subscriptionId: z.string(),
+						plan: z.string(),
+						interval: z.string().optional(),
+					}),
+				},
+				async (ctx) => {
+					// Full implementation in US-009
+					const userId = ctx.context.session.user.id;
+					const subscriptionId = ctx.body.subscriptionId;
+
+					const subscription = (await ctx.context.adapter.findOne({
+						model: "lsSubscription",
+						where: [{ field: "lsSubscriptionId", value: subscriptionId }],
+					})) as Record<string, unknown> | null;
+
+					if (!subscription) {
+						return ctx.json(
+							{ error: "Subscription not found", code: "subscription_not_found" },
+							{ status: 404 },
+						);
+					}
+					if (subscription.userId !== userId) {
+						return ctx.json(
+							{ error: "Not authorized", code: "not_owner" },
+							{ status: 403 },
+						);
+					}
+
+					return ctx.json({ success: true });
+				},
+			),
+
+			lemonSqueezySubscriptionList: createAuthEndpoint(
+				"/lemonsqueezy/subscription/list",
+				{
+					method: "GET",
+					use: [sessionMiddleware],
+					query: z.object({
+						cursor: z.string().optional(),
+					}),
+				},
+				async (ctx) => {
+					// Full implementation in US-010
+					const userId = ctx.context.session.user.id;
+
+					const subscriptions = (await ctx.context.adapter.findMany({
+						model: "lsSubscription",
+						where: [{ field: "userId", value: userId }],
+					})) as Array<Record<string, unknown>>;
+
+					return ctx.json({ subscriptions, cursor: null });
+				},
+			),
+
+			lemonSqueezySubscriptionGet: createAuthEndpoint(
+				"/lemonsqueezy/subscription/get",
+				{
+					method: "GET",
+					use: [sessionMiddleware],
+					query: z.object({
+						subscriptionId: z.string(),
+					}),
+				},
+				async (ctx) => {
+					// Full implementation in US-010
+					const userId = ctx.context.session.user.id;
+					const subscriptionId = ctx.query.subscriptionId;
+
+					const subscription = (await ctx.context.adapter.findOne({
+						model: "lsSubscription",
+						where: [{ field: "lsSubscriptionId", value: subscriptionId }],
+					})) as Record<string, unknown> | null;
+
+					if (!subscription) {
+						return ctx.json(
+							{ error: "Subscription not found", code: "subscription_not_found" },
+							{ status: 404 },
+						);
+					}
+					if (subscription.userId !== userId) {
+						return ctx.json(
+							{ error: "Not authorized", code: "not_owner" },
+							{ status: 403 },
+						);
+					}
+
+					return ctx.json({ subscription });
+				},
+			),
+
+			lemonSqueezySubscriptionPortal: createAuthEndpoint(
+				"/lemonsqueezy/subscription/portal",
+				{
+					method: "POST",
+					use: [sessionMiddleware],
+					body: z.object({
+						subscriptionId: z.string(),
+					}),
+				},
+				async (ctx) => {
+					// Full implementation in US-012
+					const userId = ctx.context.session.user.id;
+					const subscriptionId = ctx.body.subscriptionId;
+
+					const subscription = (await ctx.context.adapter.findOne({
+						model: "lsSubscription",
+						where: [{ field: "lsSubscriptionId", value: subscriptionId }],
+					})) as Record<string, unknown> | null;
+
+					if (!subscription) {
+						return ctx.json(
+							{ error: "Subscription not found", code: "subscription_not_found" },
+							{ status: 404 },
+						);
+					}
+					if (subscription.userId !== userId) {
+						return ctx.json(
+							{ error: "Not authorized", code: "not_owner" },
+							{ status: 403 },
+						);
+					}
+
+					return ctx.json({ url: "" });
+				},
+			),
 		},
 	} satisfies BetterAuthPlugin;
 };

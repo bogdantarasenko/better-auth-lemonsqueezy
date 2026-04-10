@@ -18,6 +18,7 @@
 - In endpoint handlers, access adapter via `ctx.context.adapter` and `ctx.context.internalAdapter`
 - `ctx.context.internalAdapter.findUserByEmail(email)` returns `{ user }` or null
 - Use `requireRequest: true` in endpoint options to access `ctx.request` (native Request object)
+- Conditional/opt-in endpoints: spread with ternary `...(options.flag ? { endpointName: createAuthEndpoint(...) } : {})`
 - Webhook signature: `request.headers.get("x-signature")` for Lemon Squeezy HMAC SHA-256
 - LS webhook payload structure: `{ meta: { event_name, custom_data: { userId } }, data: { id, attributes: { ... } } }`
 
@@ -195,4 +196,20 @@
   - Lemon Squeezy GET /v1/subscriptions/{id} returns `data.attributes.urls.customer_portal` for the billing portal URL
   - Portal URLs should never be cached — they can expire
   - The portal endpoint follows the same pattern as other subscription endpoints: ownership check → LS API call → return result
+---
+
+## 2026-04-10 - US-013
+- Implemented POST /lemonsqueezy/usage endpoint (opt-in via `usageEndpoint: true` in config)
+- Validates quantity is a positive integer, returns `invalid_quantity` error code
+- Looks up `subscriptionItemId` from local lsSubscription table, returns `no_subscription_item` if missing
+- Ownership verification and not-found checks consistent with other endpoints
+- Calls LS API POST /v1/usage-records with JSON:API format including subscription-item relationship
+- Created `src/usage.ts` with `createUsageReporter()` factory for server-side programmatic usage reporting
+- Factory follows same pattern as `createAccessControlHelpers()` — accepts raw adapter or `{ options: { adapter } }`
+- Endpoint is conditionally spread into endpoints object using `...(options.usageEndpoint ? { ... } : {})`
+- Files changed: `src/index.ts`, `src/usage.ts` (new)
+- **Learnings for future iterations:**
+  - Conditional endpoints can be spread into the endpoints object with ternary: `...(condition ? { endpointName: createAuthEndpoint(...) } : {})`
+  - Lemon Squeezy usage records API: POST /v1/usage-records with `subscription-item` relationship (hyphenated, not camelCase)
+  - `createUsageReporter()` returns a bound function — same factory pattern as access control helpers
 ---

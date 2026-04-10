@@ -568,9 +568,8 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					}),
 				},
 				async (ctx) => {
-					// Full implementation in US-009
 					const userId = ctx.context.session.user.id;
-					const subscriptionId = ctx.body.subscriptionId;
+					const { subscriptionId, plan: planName, interval: requestedInterval } = ctx.body;
 
 					const subscription = (await ctx.context.adapter.findOne({
 						model: "lsSubscription",
@@ -590,7 +589,76 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 						);
 					}
 
-					return ctx.json({ success: true });
+					// Resolve target plan from config
+					const plans = options.subscription?.plans ?? [];
+					const plan = plans.find((p) => p.name === planName);
+					if (!plan) {
+						return ctx.json(
+							{ error: "Plan not found", code: "plan_not_found" },
+							{ status: 400 },
+						);
+					}
+
+					// Resolve interval — default to first key in plan.intervals
+					const intervalKeys = Object.keys(plan.intervals) as Array<string>;
+					const interval = requestedInterval ?? intervalKeys[0];
+					if (!interval) {
+						return ctx.json(
+							{ error: "No intervals configured for plan", code: "no_intervals" },
+							{ status: 400 },
+						);
+					}
+
+					const targetVariantId = plan.intervals[interval as keyof typeof plan.intervals];
+					if (!targetVariantId) {
+						return ctx.json(
+							{ error: "Invalid interval for plan", code: "invalid_interval" },
+							{ status: 400 },
+						);
+					}
+
+					// Idempotency: if current variantId already matches target, return success
+					if (subscription.variantId === targetVariantId) {
+						return ctx.json({
+							success: true,
+							message: "Subscription is already on the requested plan and interval.",
+						});
+					}
+
+					// Call Lemon Squeezy API to update variant
+					const updateResponse = await fetch(
+						`https://api.lemonsqueezy.com/v1/subscriptions/${subscriptionId}`,
+						{
+							method: "PATCH",
+							headers: {
+								Authorization: `Bearer ${options.apiKey}`,
+								Accept: "application/vnd.api+json",
+								"Content-Type": "application/vnd.api+json",
+							},
+							body: JSON.stringify({
+								data: {
+									type: "subscriptions",
+									id: subscriptionId,
+									attributes: {
+										variant_id: Number(targetVariantId),
+									},
+								},
+							}),
+						},
+					);
+
+					if (!updateResponse.ok) {
+						const errorText = await updateResponse.text();
+						throw new Error(
+							`Lemon Squeezy update failed: ${updateResponse.status} ${errorText}`,
+						);
+					}
+
+					// Do NOT update local record — webhook (subscription_updated) is the source of truth
+					return ctx.json({
+						success: true,
+						message: "Subscription update requested. Changes will be reflected after webhook processing.",
+					});
 				},
 			),
 

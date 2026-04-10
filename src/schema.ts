@@ -9,6 +9,7 @@ export const lsCustomerSchema = {
 				type: "string" as const,
 				required: true,
 				unique: true,
+				index: true,
 				references: {
 					model: "user",
 					field: "id",
@@ -42,6 +43,7 @@ export const lsSubscriptionSchema = {
 			userId: {
 				type: "string" as const,
 				required: true,
+				index: true,
 				references: {
 					model: "user",
 					field: "id",

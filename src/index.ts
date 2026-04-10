@@ -20,6 +20,7 @@ export type {
 	OnWebhookEventCallback,
 	WebhookEventPayload,
 } from "./types";
+export { createAccessControlHelpers } from "./access-control";
 
 /** In-memory checkout cache: key -> { url, expiresAt } */
 const checkoutCache = new Map<string, { url: string; expiresAt: number }>();

@@ -183,3 +183,16 @@
   - Accept a union type `Adapter | { options: { adapter: Adapter } }` to support both raw adapter and auth instance patterns
   - Active subscription statuses for access control: `active` and `on_trial` only
 ---
+
+## 2026-04-10 - US-012
+- Implemented POST /lemonsqueezy/subscription/portal endpoint with full Lemon Squeezy API integration
+- Fetches fresh subscription data from LS API GET /v1/subscriptions/{id} to retrieve `urls.customer_portal`
+- No caching — portal URLs can expire, so always fetches fresh
+- Ownership verification and not-found checks preserved from stub
+- Client plugin already has `subscription.portal({ subscriptionId })` method via `$InferServerPlugin` auto-inference
+- Files changed: `src/index.ts`
+- **Learnings for future iterations:**
+  - Lemon Squeezy GET /v1/subscriptions/{id} returns `data.attributes.urls.customer_portal` for the billing portal URL
+  - Portal URLs should never be cached — they can expire
+  - The portal endpoint follows the same pattern as other subscription endpoints: ownership check → LS API call → return result
+---

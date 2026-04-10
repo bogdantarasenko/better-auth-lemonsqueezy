@@ -2,6 +2,9 @@
  * Usage reporting helpers for Lemon Squeezy usage-based billing.
  */
 
+/** Default timeout for outbound Lemon Squeezy API requests (10 seconds) */
+const LS_API_TIMEOUT = 10_000;
+
 interface Adapter {
 	findOne(params: {
 		model: string;
@@ -45,36 +48,52 @@ async function reportUsage(
 		);
 	}
 
-	const response = await fetch(
-		"https://api.lemonsqueezy.com/v1/usage-records",
-		{
-			method: "POST",
-			headers: {
-				Authorization: `Bearer ${apiKey}`,
-				Accept: "application/vnd.api+json",
-				"Content-Type": "application/vnd.api+json",
-			},
-			body: JSON.stringify({
-				data: {
-					type: "usage-records",
-					attributes: {
-						quantity,
-					},
-					relationships: {
-						"subscription-item": {
-							data: {
-								type: "subscription-items",
-								id: subscriptionItemId,
+	let response: Response;
+	try {
+		response = await fetch(
+			"https://api.lemonsqueezy.com/v1/usage-records",
+			{
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${apiKey}`,
+					Accept: "application/vnd.api+json",
+					"Content-Type": "application/vnd.api+json",
+				},
+				signal: AbortSignal.timeout(LS_API_TIMEOUT),
+				body: JSON.stringify({
+					data: {
+						type: "usage-records",
+						attributes: {
+							quantity,
+						},
+						relationships: {
+							"subscription-item": {
+								data: {
+									type: "subscription-items",
+									id: subscriptionItemId,
+								},
 							},
 						},
 					},
-				},
-			}),
-		},
-	);
+				}),
+			},
+		);
+	} catch (err) {
+		if (err instanceof DOMException && err.name === "TimeoutError") {
+			throw new Error("Lemon Squeezy API request timed out");
+		}
+		throw err;
+	}
+
+	if (response.status === 429) {
+		throw new Error("Lemon Squeezy API rate limit exceeded");
+	}
 
 	if (!response.ok) {
 		const errorText = await response.text();
+		if (response.status >= 500) {
+			throw new Error("Lemon Squeezy upstream service unavailable");
+		}
 		throw new Error(
 			`Lemon Squeezy usage report failed: ${response.status} ${errorText}`,
 		);

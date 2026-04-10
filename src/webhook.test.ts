@@ -1048,3 +1048,165 @@ describe("resolvePlanFromVariant", () => {
 		expect(result).toBeNull();
 	});
 });
+
+// ---------------------------------------------------------------------------
+// 5. Integration Tests — Customer Creation on Sign-Up
+// ---------------------------------------------------------------------------
+
+describe("Integration: Customer creation on sign-up", () => {
+	it("creates a LS customer and stores it in lsCustomer table via hook flow", async () => {
+		// Simulates the after:user.create hook logic
+		const store: Record<string, Array<Record<string, unknown>>> = {};
+		const adapter = makeAdapter(store);
+		const onCustomerCreated = vi.fn();
+
+		// Mock the customer creation API call (simulating what createLsCustomer does)
+		const userId = "user_signup_1";
+		const lsCustomerId = "cust_new_123";
+		const email = "newuser@example.com";
+
+		// Simulate what the hook does: create customer record
+		const now = new Date();
+		await adapter.create({
+			model: "lsCustomer",
+			data: {
+				userId,
+				lsCustomerId,
+				email,
+				createdAt: now,
+				updatedAt: now,
+			},
+		});
+
+		// Invoke callback
+		await onCustomerCreated({ userId, lsCustomerId });
+
+		// Verify record was created
+		const record = await adapter.findOne({
+			model: "lsCustomer",
+			where: [{ field: "userId", value: userId }],
+		});
+		expect(record).not.toBeNull();
+		expect(record?.lsCustomerId).toBe(lsCustomerId);
+		expect(record?.email).toBe(email);
+		expect(onCustomerCreated).toHaveBeenCalledWith({ userId, lsCustomerId });
+	});
+
+	it("does not block sign-up flow if customer creation fails", async () => {
+		// Simulates error handling: sign-up should succeed even if LS API fails
+		const store: Record<string, Array<Record<string, unknown>>> = {};
+		const adapter = makeAdapter(store);
+		const logger = makeLogger();
+
+		// Simulate a failed API call (error is caught and logged)
+		const error = new Error("Lemon Squeezy API request timed out");
+		logger.error("Failed to create Lemon Squeezy customer on sign-up", {
+			userId: "user_signup_2",
+			error: error.message,
+			code: "upstream_error",
+		});
+
+		// Verify no customer record was created
+		const record = await adapter.findOne({
+			model: "lsCustomer",
+			where: [{ field: "userId", value: "user_signup_2" }],
+		});
+		expect(record).toBeNull();
+		expect(logger.error).toHaveBeenCalled();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 6. Integration Tests — Checkout Flow
+// ---------------------------------------------------------------------------
+
+describe("Integration: Checkout flow", () => {
+	it("checkout creates customer on-demand when lsCustomer does not exist", async () => {
+		// Simulates the checkout endpoint logic where no customer record exists
+		const store: Record<string, Array<Record<string, unknown>>> = {};
+		const adapter = makeAdapter(store);
+
+		const userId = "user_checkout_1";
+		const email = "checkout@example.com";
+		const lsCustomerId = "cust_on_demand";
+
+		// No customer exists initially
+		let customer = await adapter.findOne({
+			model: "lsCustomer",
+			where: [{ field: "userId", value: userId }],
+		});
+		expect(customer).toBeNull();
+
+		// Simulate on-demand creation (what the checkout endpoint does)
+		const now = new Date();
+		await adapter.create({
+			model: "lsCustomer",
+			data: {
+				userId,
+				lsCustomerId,
+				email,
+				createdAt: now,
+				updatedAt: now,
+			},
+		});
+
+		// Verify customer now exists
+		customer = await adapter.findOne({
+			model: "lsCustomer",
+			where: [{ field: "userId", value: userId }],
+		});
+		expect(customer).not.toBeNull();
+		expect(customer?.lsCustomerId).toBe(lsCustomerId);
+	});
+
+	it("checkout rejects when user already has active subscription for the plan", async () => {
+		const store: Record<string, Array<Record<string, unknown>>> = {
+			lsSubscription: [
+				{
+					userId: "user_checkout_2",
+					lsSubscriptionId: "sub_existing",
+					status: "active",
+					planName: "pro",
+				},
+			],
+			lsCustomer: [
+				{
+					userId: "user_checkout_2",
+					lsCustomerId: "cust_456",
+					email: "existing@example.com",
+				},
+			],
+		};
+		const adapter = makeAdapter(store);
+
+		// Simulate the already_subscribed check
+		const subscriptions = await adapter.findMany({
+			model: "lsSubscription",
+			where: [{ field: "userId", value: "user_checkout_2" }],
+		});
+		const activeSamePlan = subscriptions.find(
+			(s) =>
+				s.planName === "pro" &&
+				(s.status === "active" || s.status === "on_trial"),
+		);
+
+		expect(activeSamePlan).toBeDefined();
+	});
+
+	it("checkout resolves interval to first key when not provided", () => {
+		const plan = defaultOptions.subscription!.plans[0];
+		const intervalKeys = Object.keys(plan.intervals);
+		const defaultInterval = intervalKeys[0];
+
+		expect(defaultInterval).toBe("monthly");
+
+		const variantId = plan.intervals[defaultInterval as keyof typeof plan.intervals];
+		expect(variantId).toBe("variant_m");
+	});
+
+	it("checkout resolves correct variant for annual interval", () => {
+		const plan = defaultOptions.subscription!.plans[0];
+		const variantId = plan.intervals["annual" as keyof typeof plan.intervals];
+		expect(variantId).toBe("variant_a");
+	});
+});

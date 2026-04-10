@@ -23,6 +23,68 @@ export type {
 export { createAccessControlHelpers } from "./access-control";
 export { createUsageReporter } from "./usage";
 
+/** Default timeout for outbound Lemon Squeezy API requests (10 seconds) */
+const LS_API_TIMEOUT = 10_000;
+
+/**
+ * Make a fetch request to the Lemon Squeezy API with a 10-second timeout.
+ * Handles rate limiting (429) and upstream errors (5xx/network) with structured error responses.
+ * Returns { data } on success, or { error, code } on failure.
+ */
+async function lsFetch(
+	url: string,
+	init: RequestInit & { headers: Record<string, string> },
+): Promise<{ data?: unknown; error?: string; code?: string; status?: number }> {
+	try {
+		const response = await fetch(url, {
+			...init,
+			signal: AbortSignal.timeout(LS_API_TIMEOUT),
+		});
+
+		if (response.status === 429) {
+			return {
+				error: "Lemon Squeezy API rate limit exceeded",
+				code: "rate_limited",
+				status: 429,
+			};
+		}
+
+		if (!response.ok) {
+			const errorText = await response.text();
+			if (response.status >= 500) {
+				return {
+					error: "Lemon Squeezy upstream service unavailable",
+					code: "upstream_error",
+					status: response.status,
+				};
+			}
+			return {
+				error: `Lemon Squeezy API error: ${response.status} ${errorText}`,
+				code: "upstream_error",
+				status: response.status,
+			};
+		}
+
+		const data = await response.json();
+		return { data };
+	} catch (err) {
+		if (err instanceof DOMException && err.name === "TimeoutError") {
+			return {
+				error: "Lemon Squeezy API request timed out",
+				code: "upstream_error",
+			};
+		}
+		if (err instanceof TypeError) {
+			// Network error
+			return {
+				error: "Lemon Squeezy upstream service unavailable",
+				code: "upstream_error",
+			};
+		}
+		throw err;
+	}
+}
+
 /** In-memory checkout cache: key -> { url, expiresAt } */
 const checkoutCache = new Map<string, { url: string; expiresAt: number }>();
 
@@ -31,15 +93,15 @@ const checkoutLocks = new Map<string, Promise<string>>();
 
 /**
  * Create a Lemon Squeezy customer via API.
- * Returns the customer ID string.
+ * Returns the customer ID string, or throws with structured error info.
  */
 async function createLsCustomer(
 	apiKey: string,
 	storeId: string,
 	email: string,
 	name: string,
-): Promise<string> {
-	const response = await fetch(
+): Promise<{ customerId?: string; error?: string; code?: string }> {
+	const result = await lsFetch(
 		"https://api.lemonsqueezy.com/v1/customers",
 		{
 			method: "POST",
@@ -62,15 +124,12 @@ async function createLsCustomer(
 		},
 	);
 
-	if (!response.ok) {
-		const errorText = await response.text();
-		throw new Error(
-			`Failed to create LS customer: ${response.status} ${errorText}`,
-		);
+	if (result.error) {
+		return { error: result.error, code: result.code };
 	}
 
-	const result = (await response.json()) as { data: { id: string } };
-	return result.data.id;
+	const data = result.data as { data: { id: string } };
+	return { customerId: data.data.id };
 }
 
 export const lemonSqueezy = (options: LemonSqueezyOptions) => {
@@ -87,13 +146,22 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 									if (!options.createCustomerOnSignUp || !user) return;
 
 									try {
-										const lsCustomerId = await createLsCustomer(
+										const result = await createLsCustomer(
 											options.apiKey,
 											options.storeId,
 											user.email,
 											user.name,
 										);
 
+										if (result.error || !result.customerId) {
+											ctx.logger.error(
+												"Failed to create Lemon Squeezy customer on sign-up",
+												{ userId: user.id, error: result.error, code: result.code },
+											);
+											return;
+										}
+
+										const lsCustomerId = result.customerId;
 										const now = new Date();
 										await ctx.adapter.create({
 											model: "lsCustomer",
@@ -115,7 +183,7 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 									} catch (error) {
 										ctx.logger.error(
 											"Error creating Lemon Squeezy customer on sign-up",
-											error,
+											{ userId: user.id, error },
 										);
 									}
 								},
@@ -152,7 +220,7 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					);
 					if (!isValid) {
 						return ctx.json(
-							{ error: "Invalid signature" },
+							{ error: "Invalid signature", code: "invalid_signature" },
 							{ status: 400 },
 						);
 					}
@@ -201,7 +269,7 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					const plan = plans.find((p) => p.name === planName);
 					if (!plan) {
 						return ctx.json(
-							{ error: "Plan not found", code: "plan_not_found" },
+							{ error: "Plan not found", code: "invalid_plan" },
 							{ status: 400 },
 						);
 					}
@@ -211,7 +279,7 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					const interval = requestedInterval ?? intervalKeys[0];
 					if (!interval) {
 						return ctx.json(
-							{ error: "No intervals configured for plan", code: "no_intervals" },
+							{ error: "No intervals configured for plan", code: "invalid_interval" },
 							{ status: 400 },
 						);
 					}
@@ -285,13 +353,22 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 
 						if (!customerRecord) {
 							// Create customer on-demand
-							const lsCustomerId = await createLsCustomer(
+							const customerResult = await createLsCustomer(
 								options.apiKey,
 								options.storeId,
 								userEmail,
 								userName,
 							);
 
+							if (customerResult.error || !customerResult.customerId) {
+								resolveLock!("");
+								return ctx.json(
+									{ error: customerResult.error ?? "Failed to create customer", code: customerResult.code ?? "upstream_error" },
+									{ status: 502 },
+								);
+							}
+
+							const lsCustomerId = customerResult.customerId;
 							const now = new Date();
 							try {
 								customerRecord = await ctx.context.adapter.create({
@@ -312,7 +389,11 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 									where: [{ field: "userId", value: userId }],
 								}) as Record<string, unknown> | null;
 								if (!customerRecord) {
-									throw new Error("Failed to create or find customer record");
+									resolveLock!("");
+									return ctx.json(
+										{ error: "Failed to create or find customer record", code: "upstream_error" },
+										{ status: 500 },
+									);
 								}
 							}
 						}
@@ -320,7 +401,7 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 						const lsCustomerId = customerRecord.lsCustomerId as string;
 
 						// Generate Lemon Squeezy checkout URL
-						const checkoutResponse = await fetch(
+						const checkoutResult = await lsFetch(
 							"https://api.lemonsqueezy.com/v1/checkouts",
 							{
 								method: "POST",
@@ -368,17 +449,18 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 							},
 						);
 
-						if (!checkoutResponse.ok) {
-							const errorText = await checkoutResponse.text();
-							throw new Error(
-								`Lemon Squeezy checkout failed: ${checkoutResponse.status} ${errorText}`,
+						if (checkoutResult.error) {
+							resolveLock!("");
+							return ctx.json(
+								{ error: checkoutResult.error, code: checkoutResult.code ?? "upstream_error" },
+								{ status: checkoutResult.code === "rate_limited" ? 429 : 502 },
 							);
 						}
 
-						const checkoutResult = (await checkoutResponse.json()) as {
+						const checkoutData = checkoutResult.data as {
 							data: { attributes: { url: string } };
 						};
-						const checkoutUrl = checkoutResult.data.attributes.url;
+						const checkoutUrl = checkoutData.data.attributes.url;
 
 						// Cache for 60 seconds
 						checkoutCache.set(idempotencyKey, {
@@ -437,7 +519,7 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					}
 
 					// Call Lemon Squeezy API to cancel (cancels at period end)
-					const cancelResponse = await fetch(
+					const cancelResult = await lsFetch(
 						`https://api.lemonsqueezy.com/v1/subscriptions/${subscriptionId}`,
 						{
 							method: "PATCH",
@@ -458,10 +540,10 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 						},
 					);
 
-					if (!cancelResponse.ok) {
-						const errorText = await cancelResponse.text();
-						throw new Error(
-							`Lemon Squeezy cancel failed: ${cancelResponse.status} ${errorText}`,
+					if (cancelResult.error) {
+						return ctx.json(
+							{ error: cancelResult.error, code: cancelResult.code ?? "upstream_error" },
+							{ status: cancelResult.code === "rate_limited" ? 429 : 502 },
 						);
 					}
 
@@ -505,14 +587,6 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 						);
 					}
 
-					// Only cancelled subscriptions can be resumed
-					if (subscription.status !== "cancelled" && subscription.status !== "active") {
-						return ctx.json(
-							{ error: "Subscription cannot be resumed", code: "invalid_status" },
-							{ status: 400 },
-						);
-					}
-
 					// Idempotency: if already active, return success without API call
 					if (subscription.status === "active") {
 						return ctx.json({
@@ -521,8 +595,16 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 						});
 					}
 
+					// Only cancelled subscriptions can be resumed
+					if (subscription.status !== "cancelled") {
+						return ctx.json(
+							{ error: "Subscription is not in cancelled status", code: "not_cancelled" },
+							{ status: 400 },
+						);
+					}
+
 					// Call Lemon Squeezy API to resume (un-cancel)
-					const resumeResponse = await fetch(
+					const resumeResult = await lsFetch(
 						`https://api.lemonsqueezy.com/v1/subscriptions/${subscriptionId}`,
 						{
 							method: "PATCH",
@@ -543,10 +625,10 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 						},
 					);
 
-					if (!resumeResponse.ok) {
-						const errorText = await resumeResponse.text();
-						throw new Error(
-							`Lemon Squeezy resume failed: ${resumeResponse.status} ${errorText}`,
+					if (resumeResult.error) {
+						return ctx.json(
+							{ error: resumeResult.error, code: resumeResult.code ?? "upstream_error" },
+							{ status: resumeResult.code === "rate_limited" ? 429 : 502 },
 						);
 					}
 
@@ -596,7 +678,7 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					const plan = plans.find((p) => p.name === planName);
 					if (!plan) {
 						return ctx.json(
-							{ error: "Plan not found", code: "plan_not_found" },
+							{ error: "Plan not found", code: "invalid_plan" },
 							{ status: 400 },
 						);
 					}
@@ -606,7 +688,7 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					const interval = requestedInterval ?? intervalKeys[0];
 					if (!interval) {
 						return ctx.json(
-							{ error: "No intervals configured for plan", code: "no_intervals" },
+							{ error: "No intervals configured for plan", code: "invalid_interval" },
 							{ status: 400 },
 						);
 					}
@@ -628,7 +710,7 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					}
 
 					// Call Lemon Squeezy API to update variant
-					const updateResponse = await fetch(
+					const updateResult = await lsFetch(
 						`https://api.lemonsqueezy.com/v1/subscriptions/${subscriptionId}`,
 						{
 							method: "PATCH",
@@ -649,10 +731,10 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 						},
 					);
 
-					if (!updateResponse.ok) {
-						const errorText = await updateResponse.text();
-						throw new Error(
-							`Lemon Squeezy update failed: ${updateResponse.status} ${errorText}`,
+					if (updateResult.error) {
+						return ctx.json(
+							{ error: updateResult.error, code: updateResult.code ?? "upstream_error" },
+							{ status: updateResult.code === "rate_limited" ? 429 : 502 },
 						);
 					}
 
@@ -752,7 +834,7 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					}
 
 					// Fetch fresh subscription from Lemon Squeezy API to get portal URL
-					const lsResponse = await fetch(
+					const portalResult = await lsFetch(
 						`https://api.lemonsqueezy.com/v1/subscriptions/${subscriptionId}`,
 						{
 							method: "GET",
@@ -763,17 +845,17 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 						},
 					);
 
-					if (!lsResponse.ok) {
-						const errorText = await lsResponse.text();
-						throw new Error(
-							`Lemon Squeezy portal fetch failed: ${lsResponse.status} ${errorText}`,
+					if (portalResult.error) {
+						return ctx.json(
+							{ error: portalResult.error, code: portalResult.code ?? "upstream_error" },
+							{ status: portalResult.code === "rate_limited" ? 429 : 502 },
 						);
 					}
 
-					const lsResult = (await lsResponse.json()) as {
+					const portalData = portalResult.data as {
 						data: { attributes: { urls: { customer_portal: string } } };
 					};
-					const portalUrl = lsResult.data.attributes.urls.customer_portal;
+					const portalUrl = portalData.data.attributes.urls.customer_portal;
 
 					return ctx.json({ url: portalUrl });
 				},
@@ -850,7 +932,7 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 							}
 
 							// Call Lemon Squeezy API to create usage record
-							const usageResponse = await fetch(
+							const usageResult = await lsFetch(
 								"https://api.lemonsqueezy.com/v1/usage-records",
 								{
 									method: "POST",
@@ -879,11 +961,10 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 								},
 							);
 
-							if (!usageResponse.ok) {
-								const errorText =
-									await usageResponse.text();
-								throw new Error(
-									`Lemon Squeezy usage report failed: ${usageResponse.status} ${errorText}`,
+							if (usageResult.error) {
+								return ctx.json(
+									{ error: usageResult.error, code: usageResult.code ?? "upstream_error" },
+									{ status: usageResult.code === "rate_limited" ? 429 : 502 },
 								);
 							}
 

@@ -252,7 +252,7 @@ export async function processWebhookEvent(
 	if (!resolved && variantId) {
 		ctx.logger.warn(
 			"Variant ID does not match any configured plan interval",
-			{ variantId, productId },
+			{ variantId, productId, lsSubscriptionId, lsCustomerId, eventType: eventName, userId },
 		);
 	}
 

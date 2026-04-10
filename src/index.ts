@@ -968,6 +968,114 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					return ctx.json({ url: portalUrl });
 				},
 			),
+		lemonSqueezySubscriptionSync: createAuthEndpoint(
+				"/lemonsqueezy/subscription/sync",
+				{
+					method: "POST",
+					use: [sessionMiddleware],
+					body: z.object({
+						subscriptionId: z.string(),
+					}),
+				},
+				async (ctx) => {
+					const userId = ctx.context.session.user.id;
+					if (!checkRateLimit(userId)) {
+						return ctx.json(
+							{ error: "Too many requests", code: "rate_limited" },
+							{ status: 429 },
+						);
+					}
+					const subscriptionId = ctx.body.subscriptionId;
+
+					const subscription = (await ctx.context.adapter.findOne({
+						model: "lsSubscription",
+						where: [{ field: "lsSubscriptionId", value: subscriptionId }],
+					})) as Record<string, unknown> | null;
+
+					if (!subscription) {
+						return ctx.json(
+							{ error: "Subscription not found", code: "subscription_not_found" },
+							{ status: 404 },
+						);
+					}
+					if (subscription.userId !== userId) {
+						return ctx.json(
+							{ error: "Not authorized", code: "not_owner" },
+							{ status: 403 },
+						);
+					}
+
+					// Fetch latest subscription state from Lemon Squeezy API
+					const syncResult = await lsFetch(
+						`https://api.lemonsqueezy.com/v1/subscriptions/${subscriptionId}`,
+						{
+							method: "GET",
+							headers: {
+								Authorization: `Bearer ${options.apiKey}`,
+								Accept: "application/vnd.api+json",
+							},
+						},
+					);
+
+					if (syncResult.error) {
+						return ctx.json(
+							{ error: syncResult.error, code: syncResult.code ?? "upstream_error" },
+							{ status: syncResult.code === "rate_limited" ? 429 : 502 },
+						);
+					}
+
+					const syncData = syncResult.data as {
+						data: {
+							attributes: Record<string, unknown>;
+						};
+					};
+					const attrs = syncData.data.attributes;
+
+					// Resolve plan from variant
+					const variantId = String(attrs.variant_id ?? "");
+					const productId = String(attrs.product_id ?? "");
+					const plans = options.subscription?.plans ?? [];
+					let planName = "unknown";
+					let interval: string | null = null;
+					for (const plan of plans) {
+						for (const [intv, vid] of Object.entries(plan.intervals)) {
+							if (vid === variantId) {
+								planName = plan.name;
+								interval = intv;
+								break;
+							}
+						}
+						if (planName !== "unknown") break;
+					}
+
+					const now = new Date();
+					const updateData: Record<string, unknown> = {
+						status: attrs.status as string,
+						variantId,
+						productId,
+						planName,
+						interval,
+						renewsAt: attrs.renews_at ? new Date(attrs.renews_at as string) : null,
+						endsAt: attrs.ends_at ? new Date(attrs.ends_at as string) : null,
+						trialEndsAt: attrs.trial_ends_at ? new Date(attrs.trial_ends_at as string) : null,
+						cancelledAt: attrs.cancelled_at ? new Date(attrs.cancelled_at as string) : null,
+						lsUpdatedAt: attrs.updated_at ? new Date(attrs.updated_at as string) : null,
+						updatedAt: now,
+					};
+
+					await ctx.context.adapter.update({
+						model: "lsSubscription",
+						update: updateData,
+						where: [{ field: "lsSubscriptionId", value: subscriptionId }],
+					});
+
+					return ctx.json({
+						success: true,
+						subscription: { ...subscription, ...updateData },
+					});
+				},
+			),
+
 		...(options.usageEndpoint
 			? {
 					lemonSqueezyUsage: createAuthEndpoint(

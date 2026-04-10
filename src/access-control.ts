@@ -3,6 +3,10 @@
  *
  * All helpers query the local lsSubscription table (no API calls to Lemon Squeezy).
  * Accept userId as a string — extracting userId from session/request is the consumer's responsibility.
+ *
+ * NOTE: Only subscriptions with status "active" or "on_trial" are considered active.
+ * Subscriptions with status "paused" are NOT treated as active — if your application
+ * needs to grant access during pause periods, check the status explicitly.
  */
 
 interface Adapter {

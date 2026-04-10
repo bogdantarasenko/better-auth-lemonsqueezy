@@ -214,12 +214,19 @@ export async function processWebhookEvent(
 		);
 		// Still invoke onWebhookEvent with resolved: false
 		if (ctx.options.onWebhookEvent) {
-			await ctx.options.onWebhookEvent({
-				type: eventName,
-				data,
-				userId: null,
-				resolved: false,
-			});
+			try {
+				await ctx.options.onWebhookEvent({
+					type: eventName,
+					data,
+					userId: null,
+					resolved: false,
+				});
+			} catch (callbackError) {
+				ctx.logger.warn(
+					"onWebhookEvent callback threw an error",
+					{ eventName, error: callbackError },
+				);
+			}
 		}
 		return;
 	}
@@ -249,12 +256,19 @@ export async function processWebhookEvent(
 		await handlePaymentEvent(ctx, eventName, existing, lsSubscriptionId, incomingUpdatedAt);
 		// Invoke callback
 		if (ctx.options.onWebhookEvent) {
-			await ctx.options.onWebhookEvent({
-				type: eventName,
-				data,
-				userId,
-				resolved: true,
-			});
+			try {
+				await ctx.options.onWebhookEvent({
+					type: eventName,
+					data,
+					userId,
+					resolved: true,
+				});
+			} catch (callbackError) {
+				ctx.logger.warn(
+					"onWebhookEvent callback threw an error",
+					{ eventName, error: callbackError },
+				);
+			}
 		}
 		return;
 	}
@@ -357,7 +371,14 @@ export async function processWebhookEvent(
 		if (eventName === "subscription_created" && duplicatePlan) {
 			payload.duplicatePlan = true;
 		}
-		await ctx.options.onWebhookEvent(payload);
+		try {
+			await ctx.options.onWebhookEvent(payload);
+		} catch (callbackError) {
+			ctx.logger.warn(
+				"onWebhookEvent callback threw an error",
+				{ eventName, error: callbackError },
+			);
+		}
 	}
 }
 

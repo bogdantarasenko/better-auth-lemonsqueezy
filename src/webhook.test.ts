@@ -1210,3 +1210,89 @@ describe("Integration: Checkout flow", () => {
 		expect(variantId).toBe("variant_a");
 	});
 });
+
+// ---------------------------------------------------------------------------
+// 7. onWebhookEvent callback error handling
+// ---------------------------------------------------------------------------
+
+describe("onWebhookEvent callback error handling", () => {
+	it("logs a warning and continues when callback throws on subscription event", async () => {
+		const onWebhookEvent = vi.fn().mockRejectedValue(new Error("callback boom"));
+		const ctx = makeWebhookCtx({
+			options: { ...defaultOptions, onWebhookEvent },
+		});
+		const payload = makeWebhookPayload(
+			"subscription_created",
+			{ status: "active" },
+			{ custom_data: { userId: "user_1" } },
+		);
+
+		// Should not throw
+		await processWebhookEvent(ctx, "subscription_created", payload);
+
+		expect(onWebhookEvent).toHaveBeenCalled();
+		expect(ctx.logger.warn).toHaveBeenCalledWith(
+			"onWebhookEvent callback threw an error",
+			expect.objectContaining({ eventName: "subscription_created" }),
+		);
+		// Subscription should still have been created
+		expect(ctx.adapter.create).toHaveBeenCalled();
+	});
+
+	it("logs a warning and continues when callback throws on payment event", async () => {
+		const onWebhookEvent = vi.fn().mockRejectedValue(new Error("callback boom"));
+		const ctx = makeWebhookCtx({
+			options: { ...defaultOptions, onWebhookEvent },
+			store: {
+				lsSubscription: [
+					{
+						userId: "user_1",
+						lsSubscriptionId: "sub_123",
+						status: "past_due",
+						planName: "pro",
+						lsUpdatedAt: new Date("2020-01-01").toISOString(),
+					},
+				],
+			},
+		});
+		const payload = makeWebhookPayload(
+			"subscription_payment_success",
+			{},
+			{ custom_data: { userId: "user_1" } },
+		);
+
+		await processWebhookEvent(ctx, "subscription_payment_success", payload);
+
+		expect(onWebhookEvent).toHaveBeenCalled();
+		expect(ctx.logger.warn).toHaveBeenCalledWith(
+			"onWebhookEvent callback threw an error",
+			expect.objectContaining({ eventName: "subscription_payment_success" }),
+		);
+		// Status update should still have happened
+		expect(ctx.adapter.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				update: expect.objectContaining({ status: "active" }),
+			}),
+		);
+	});
+
+	it("logs a warning and continues when callback throws on unresolvable user", async () => {
+		const onWebhookEvent = vi.fn().mockRejectedValue(new Error("callback boom"));
+		const ctx = makeWebhookCtx({
+			options: { ...defaultOptions, onWebhookEvent, allowEmailFallback: false },
+		});
+		const payload = makeWebhookPayload("subscription_created", {
+			customer_id: "unknown_cust",
+		});
+
+		await processWebhookEvent(ctx, "subscription_created", payload);
+
+		expect(onWebhookEvent).toHaveBeenCalledWith(
+			expect.objectContaining({ resolved: false }),
+		);
+		expect(ctx.logger.warn).toHaveBeenCalledWith(
+			"onWebhookEvent callback threw an error",
+			expect.objectContaining({ eventName: "subscription_created" }),
+		);
+	});
+});

@@ -233,3 +233,15 @@
   - Mock adapter pattern (store as Record<string, Array<Record<string, unknown>>>) works well for findOne/findMany/create/update
   - Test files are excluded from tsconfig via `"exclude": ["**/*.test.ts"]` so they don't affect build output
 ---
+
+## 2026-04-10 - US-015
+- Created comprehensive README.md with all required sections
+- package.json already had correct name, exports (`.` and `./client`), and peer dependencies from prior stories
+- tsconfig.json already configured for library output (declaration, declarationMap, sourceMap, outDir: ./dist)
+- README covers: installation, quick start (server + client), configuration reference table, webhook setup (exact LS dashboard steps + all 10 events), custom webhook logic, client-side usage (all 7 methods), access control helpers, usage-based billing, and database tables
+- Files changed: `README.md` (new)
+- **Learnings for future iterations:**
+  - Package configuration was mostly complete from US-001 — this story was primarily about documentation
+  - Better Auth webhook endpoint paths are prefixed with the auth base path (typically `/api/auth/`), so document the full path including the prefix
+  - All 7 client methods (create, cancel, resume, update, list, get, portal) should be documented with code examples
+---

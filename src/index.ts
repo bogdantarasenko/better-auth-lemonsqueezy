@@ -21,6 +21,7 @@ export type {
 	WebhookEventPayload,
 } from "./types";
 export { createAccessControlHelpers } from "./access-control";
+export { createUsageReporter } from "./usage";
 
 /** In-memory checkout cache: key -> { url, expiresAt } */
 const checkoutCache = new Map<string, { url: string; expiresAt: number }>();
@@ -777,6 +778,120 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					return ctx.json({ url: portalUrl });
 				},
 			),
+		...(options.usageEndpoint
+			? {
+					lemonSqueezyUsage: createAuthEndpoint(
+						"/lemonsqueezy/usage",
+						{
+							method: "POST",
+							use: [sessionMiddleware],
+							body: z.object({
+								subscriptionId: z.string(),
+								quantity: z.number(),
+							}),
+						},
+						async (ctx) => {
+							const userId = ctx.context.session.user.id;
+							const { subscriptionId, quantity } = ctx.body;
+
+							// Validate quantity: must be a positive integer
+							if (!Number.isInteger(quantity) || quantity <= 0) {
+								return ctx.json(
+									{
+										error: "Quantity must be a positive integer",
+										code: "invalid_quantity",
+									},
+									{ status: 400 },
+								);
+							}
+
+							const subscription =
+								(await ctx.context.adapter.findOne({
+									model: "lsSubscription",
+									where: [
+										{
+											field: "lsSubscriptionId",
+											value: subscriptionId,
+										},
+									],
+								})) as Record<string, unknown> | null;
+
+							if (!subscription) {
+								return ctx.json(
+									{
+										error: "Subscription not found",
+										code: "subscription_not_found",
+									},
+									{ status: 404 },
+								);
+							}
+							if (subscription.userId !== userId) {
+								return ctx.json(
+									{
+										error: "Not authorized",
+										code: "not_owner",
+									},
+									{ status: 403 },
+								);
+							}
+
+							const subscriptionItemId =
+								subscription.subscriptionItemId as
+									| string
+									| null;
+							if (!subscriptionItemId) {
+								return ctx.json(
+									{
+										error: "No subscription item ID found — usage reporting requires a usage-based subscription",
+										code: "no_subscription_item",
+									},
+									{ status: 400 },
+								);
+							}
+
+							// Call Lemon Squeezy API to create usage record
+							const usageResponse = await fetch(
+								"https://api.lemonsqueezy.com/v1/usage-records",
+								{
+									method: "POST",
+									headers: {
+										Authorization: `Bearer ${options.apiKey}`,
+										Accept: "application/vnd.api+json",
+										"Content-Type":
+											"application/vnd.api+json",
+									},
+									body: JSON.stringify({
+										data: {
+											type: "usage-records",
+											attributes: {
+												quantity,
+											},
+											relationships: {
+												"subscription-item": {
+													data: {
+														type: "subscription-items",
+														id: subscriptionItemId,
+													},
+												},
+											},
+										},
+									}),
+								},
+							);
+
+							if (!usageResponse.ok) {
+								const errorText =
+									await usageResponse.text();
+								throw new Error(
+									`Lemon Squeezy usage report failed: ${usageResponse.status} ${errorText}`,
+								);
+							}
+
+							return ctx.json({ success: true });
+						},
+					),
+				}
+			: {}),
 		},
 	} satisfies BetterAuthPlugin;
 };

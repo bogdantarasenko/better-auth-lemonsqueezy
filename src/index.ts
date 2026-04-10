@@ -404,7 +404,6 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					}),
 				},
 				async (ctx) => {
-					// Full implementation in US-007
 					const userId = ctx.context.session.user.id;
 					const subscriptionId = ctx.body.subscriptionId;
 
@@ -426,6 +425,45 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 						);
 					}
 
+					// Idempotency: if already cancelled, return success without API call
+					if (subscription.status === "cancelled") {
+						return ctx.json({
+							success: true,
+							message:
+								"Subscription is already cancelled. It will remain active until the end of the billing period.",
+						});
+					}
+
+					// Call Lemon Squeezy API to cancel (cancels at period end)
+					const cancelResponse = await fetch(
+						`https://api.lemonsqueezy.com/v1/subscriptions/${subscriptionId}`,
+						{
+							method: "PATCH",
+							headers: {
+								Authorization: `Bearer ${options.apiKey}`,
+								Accept: "application/vnd.api+json",
+								"Content-Type": "application/vnd.api+json",
+							},
+							body: JSON.stringify({
+								data: {
+									type: "subscriptions",
+									id: subscriptionId,
+									attributes: {
+										cancelled: true,
+									},
+								},
+							}),
+						},
+					);
+
+					if (!cancelResponse.ok) {
+						const errorText = await cancelResponse.text();
+						throw new Error(
+							`Lemon Squeezy cancel failed: ${cancelResponse.status} ${errorText}`,
+						);
+					}
+
+					// Do NOT update local status — webhook is the source of truth
 					return ctx.json({
 						success: true,
 						message:

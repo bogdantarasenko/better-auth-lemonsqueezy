@@ -139,3 +139,18 @@
   - Guard both `cancelled` and `active` statuses for resume: cancelled is the expected state, active is the idempotent shortcut
   - Pattern: cancel/resume/update endpoints follow identical structure — ownership check, idempotency guard, LS API call, no local update
 ---
+
+## 2026-04-10 - US-009
+- Implemented POST /lemonsqueezy/subscription/update with full Lemon Squeezy API integration
+- Accepts subscriptionId, plan (target plan name), optional interval (defaults to first key)
+- Resolves target variant ID from configured plans
+- Idempotency: if current variantId matches target variant, returns success without API call
+- Calls LS API PATCH /v1/subscriptions/{id} with `variant_id` (as Number) to change plan
+- Does NOT update local lsSubscription record — webhook (subscription_updated) is the source of truth
+- Ownership verification and not-found checks preserved from stub
+- Files changed: `src/index.ts`
+- **Learnings for future iterations:**
+  - Lemon Squeezy PATCH variant_id expects a number, not a string — use `Number(targetVariantId)`
+  - Plan changes in LS arrive as `subscription_updated` events (not a distinct `subscription_plan_changed` event)
+  - The update endpoint follows the exact same pattern as cancel/resume: ownership check → idempotency guard → LS API PATCH → no local update
+---

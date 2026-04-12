@@ -38,12 +38,24 @@
     "zod": ">=3.20.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "better-auth": "^1.2.9",
+    "better-sqlite3": "^12.8.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0",
     "zod": "^3.24.0"
   },
-  "files": ["dist", "src", "README.md"],
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
   "license": "MIT",
-  "keywords": ["better-auth", "lemonsqueezy", "lemon-squeezy", "subscription", "payments"]
+  "keywords": [
+    "better-auth",
+    "lemonsqueezy",
+    "lemon-squeezy",
+    "subscription",
+    "payments"
+  ]
 }

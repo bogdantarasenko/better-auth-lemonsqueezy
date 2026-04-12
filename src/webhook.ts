@@ -128,11 +128,12 @@ export async function resolveUserId(
 	ctx: WebhookContext,
 	data: Record<string, unknown>,
 ): Promise<string | null> {
-	// 1. Check meta.custom_data.userId
+	// 1. Check meta.custom_data.user_id (set during checkout via checkout_data.custom)
 	const meta = data.meta as Record<string, unknown> | undefined;
 	const customData = meta?.custom_data as Record<string, unknown> | undefined;
-	if (customData?.userId && typeof customData.userId === "string") {
-		return customData.userId;
+	const rawUserId = customData?.user_id ?? customData?.userId;
+	if (rawUserId && typeof rawUserId === "string") {
+		return rawUserId;
 	}
 
 	// 2. Look up by lsCustomerId
@@ -244,7 +245,11 @@ export async function processWebhookEvent(
 		? new Date(attrs.updated_at as string)
 		: null;
 	if (existing && incomingUpdatedAt && existing.lsUpdatedAt) {
-		const storedUpdatedAt = new Date(existing.lsUpdatedAt as string);
+		// lsUpdatedAt may be a Date object (ORM) or ISO string — handle both
+		const storedUpdatedAt =
+			existing.lsUpdatedAt instanceof Date
+				? existing.lsUpdatedAt
+				: new Date(existing.lsUpdatedAt as string);
 		if (incomingUpdatedAt < storedUpdatedAt) {
 			// Stale event — skip processing but still return 200
 			return;

@@ -757,7 +757,7 @@ describe("Webhook Event Handling", () => {
 	});
 
 	describe("user resolution priority", () => {
-		it("resolves via meta.custom_data.userId first", async () => {
+		it("resolves via meta.custom_data.user_id first", async () => {
 			const ctx = makeWebhookCtx({
 				store: {
 					lsCustomer: [
@@ -771,6 +771,26 @@ describe("Webhook Event Handling", () => {
 				{
 					customer_id: "cust_123",
 					user_email: "test@example.com",
+				},
+				{ custom_data: { user_id: "user_1" } },
+			);
+
+			const userId = await resolveUserId(ctx, payload);
+			expect(userId).toBe("user_1");
+		});
+
+		it("resolves via meta.custom_data.userId (legacy) first", async () => {
+			const ctx = makeWebhookCtx({
+				store: {
+					lsCustomer: [
+						{ userId: "user_2", lsCustomerId: "cust_123" },
+					],
+				},
+			});
+			const payload = makeWebhookPayload(
+				"subscription_created",
+				{
+					customer_id: "cust_123",
 				},
 				{ custom_data: { userId: "user_1" } },
 			);

@@ -98,6 +98,12 @@ function checkRateLimit(userId: string): boolean {
 	const now = Date.now();
 	const entry = rateLimitMap.get(userId);
 	if (!entry || entry.resetAt <= now) {
+		// Periodically prune expired entries to prevent unbounded growth
+		if (rateLimitMap.size > 10_000) {
+			for (const [key, val] of rateLimitMap) {
+				if (val.resetAt <= now) rateLimitMap.delete(key);
+			}
+		}
 		rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
 		return true;
 	}
@@ -226,77 +232,70 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 				},
 			};
 		},
-		endpoints: {
-			lemonSqueezyWebhook: createAuthEndpoint(
-				"/lemonsqueezy/webhook",
-				{
-					method: "POST",
-					requireRequest: true,
-					metadata: {
-						SERVER_ONLY: true,
-					},
-				},
-				async (ctx) => {
-					const request = ctx.request;
-					if (!request) {
-						throw new Error("Request object is required");
-					}
+		async onRequest(request, ctx) {
+			// Handle webhook at /lemonsqueezy/webhook before Better Auth consumes the body
+			const url = new URL(request.url);
+			const basePath = new URL(ctx.baseURL).pathname.replace(/\/+$/, "");
+			const webhookPath = `${basePath}/lemonsqueezy/webhook`;
 
-					const rawBody = await request.text();
-					const signature = request.headers.get("x-signature") ?? "";
+			if (request.method !== "POST" || url.pathname !== webhookPath) return;
 
-					// Verify webhook signature
-					const isValid = await verifyWebhookSignature(
-						rawBody,
-						signature,
-						options.webhookSecret,
-					);
-					if (!isValid) {
-						return ctx.json(
-							{ error: "Invalid signature", code: "invalid_signature" },
-							{ status: 400 },
-						);
-					}
+			const rawBody = await request.text();
+			const signature = request.headers.get("x-signature") ?? "";
 
-					let payload: Record<string, unknown>;
-				try {
-					payload = JSON.parse(rawBody) as Record<string, unknown>;
-				} catch {
-					return ctx.json(
+			const isValid = await verifyWebhookSignature(
+				rawBody,
+				signature,
+				options.webhookSecret,
+			);
+			if (!isValid) {
+				return {
+					response: Response.json(
+						{ error: "Invalid signature", code: "invalid_signature" },
+						{ status: 400 },
+					),
+				};
+			}
+
+			let payload: Record<string, unknown>;
+			try {
+				payload = JSON.parse(rawBody) as Record<string, unknown>;
+			} catch {
+				return {
+					response: Response.json(
 						{ error: "Invalid JSON body", code: "invalid_body" },
 						{ status: 400 },
-					);
-				}
-					const meta = payload.meta as
-						| Record<string, unknown>
-						| undefined;
-					const eventName = (meta?.event_name as string) ?? "";
+					),
+				};
+			}
 
-					// Build webhook context
-					const webhookCtx: WebhookContext = {
-						adapter: ctx.context.adapter,
-						internalAdapter: ctx.context.internalAdapter,
-						logger: ctx.context.logger,
-						options,
-					};
+			const meta = payload.meta as Record<string, unknown> | undefined;
+			const eventName = (meta?.event_name as string) ?? "";
 
-					try {
-						await processWebhookEvent(webhookCtx, eventName, payload);
-					} catch (error) {
-						ctx.context.logger.error(
-							"Webhook processing failed",
-							{ eventName, error },
-						);
-						return ctx.json(
-							{ error: "Webhook processing failed", code: "processing_error" },
-							{ status: 500 },
-						);
-					}
+			const webhookCtx: WebhookContext = {
+				adapter: ctx.adapter,
+				internalAdapter: ctx.internalAdapter,
+				logger: ctx.logger,
+				options,
+			};
 
-					return ctx.json({ success: true });
-				},
-			),
+			try {
+				await processWebhookEvent(webhookCtx, eventName, payload);
+			} catch (error) {
+				ctx.logger.error("Webhook processing failed", { eventName, error });
+				return {
+					response: Response.json(
+						{ error: "Webhook processing failed", code: "processing_error" },
+						{ status: 500 },
+					),
+				};
+			}
 
+			return {
+				response: Response.json({ success: true }),
+			};
+		},
+		endpoints: {
 			lemonSqueezySubscriptionCreate: createAuthEndpoint(
 				"/lemonsqueezy/subscription/create",
 				{
@@ -491,11 +490,9 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 											checkout_data: {
 												email: userEmail,
 												custom: {
+													user_id: userId,
 													customer_id: lsCustomerId,
 												},
-											},
-											custom_data: {
-												userId,
 											},
 											product_options: {
 												redirect_url: resolvedSuccessUrl,
@@ -817,7 +814,7 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 									type: "subscriptions",
 									id: subscriptionId,
 									attributes: {
-										variant_id: Number(targetVariantId),
+										variant_id: parseInt(targetVariantId, 10),
 									},
 								},
 							}),

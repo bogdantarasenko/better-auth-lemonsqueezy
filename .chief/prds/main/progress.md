@@ -15,6 +15,7 @@
 - Customer creation is async (database hook `after` user create) — poll the DB to wait for lsCustomer record
 - Local DB can be queried directly via `new Database("e2e/test.db", { readonly: true })` in tests
 - Subscription management endpoints (cancel/resume/update) trigger LS API calls but don't update local DB — webhook is source of truth, so poll DB for changes after API calls
+- MCP server testing: use `InMemoryTransport.createLinkedPair()` for in-process server↔client, `server.connect(transport)` instead of `start()`
 
 ---
 
@@ -128,4 +129,18 @@
   - Endpoint returns 400 for invalid quantity (`invalid_quantity`), 404 for missing subscription (`subscription_not_found`), 403 for wrong owner (`not_owner`), 400 for no subscription item (`no_subscription_item`)
   - `subscriptionItemId` is only populated on `subscription_created` webhook when `first_subscription_item.id` is present — non-usage-based products won't have it
   - Vitest `skip()` from test context (`it("...", ({ skip }) => { skip() })`) cleanly skips individual tests at runtime
+---
+
+## 2026-04-13 - US-009
+- What was implemented: MCP tool tests (tests 8.1–8.17) — all 17 MCP tools tested against real LS API via in-process MCP server + client, plus audit log resource verification
+- Files changed:
+  - `e2e/08-mcp.test.ts` — 17 tests: get_user, list_stores, get_store, list_products, get_product, get_product_variants, list_orders, get_order (skippable), list_customers, get_customer, list_subscriptions, get_subscription, list_license_keys, list_webhooks, create_checkout, create_webhook, audit log resource
+- **Learnings for future iterations:**
+  - MCP SDK provides `InMemoryTransport.createLinkedPair()` for in-process server↔client testing — no stdio/subprocess needed
+  - Import paths: `@modelcontextprotocol/sdk/client/index.js` for Client, `@modelcontextprotocol/sdk/inMemory.js` for InMemoryTransport
+  - `createLemonSqueezyMcpServer` returns `{ server, start() }` — for testing, use `server.connect(transport)` directly instead of `start()` (which creates StdioServerTransport)
+  - MCP tool results are in `{ content: [{ type: "text", text: "..." }] }` format — parse `text` as JSON to get LS API responses
+  - `lsFetch` wraps LS API responses as `{ data }` where `data` is the full JSON body — so tool output contains the complete JSON:API response with `data.data`, `data.data.attributes`, etc.
+  - `client.readResource({ uri: "audit://..." })` reads MCP resources; returns `{ contents: [{ text }] }`
+  - Audit log entries accumulate in-memory during the MCP session — test 8.17 verifies all 16 prior tool calls are logged
 ---

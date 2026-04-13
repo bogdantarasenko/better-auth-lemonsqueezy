@@ -100,7 +100,7 @@
         "Audit log resource contains entries from previous tool calls."
       ],
       "priority": 9,
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-010",

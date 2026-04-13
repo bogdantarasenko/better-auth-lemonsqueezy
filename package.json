@@ -1,5 +1,5 @@
 {
-  "name": "@better-auth/lemonsqueezy",
+  "name": "better-auth-lemonsqueezy",
   "version": "0.1.0",
   "description": "Lemon Squeezy plugin for Better Auth — subscription management, webhooks, and access control",
   "type": "module",
@@ -57,5 +57,8 @@
     "lemon-squeezy",
     "subscription",
     "payments"
-  ]
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  }
 }

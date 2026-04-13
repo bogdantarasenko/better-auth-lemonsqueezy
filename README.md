@@ -242,6 +242,84 @@ An HTTP endpoint (`POST /api/auth/lemonsqueezy/usage`) is also available when `u
 
 The plugin uses in-memory rate limiting, checkout URL caching, and request deduplication. These are **not shared across serverless instances** — each cold start gets a fresh state. In serverless deployments (e.g., AWS Lambda, Vercel Functions), rate limiting will be best-effort only and checkout deduplication may not prevent all duplicate API calls. This is acceptable for most use cases; the Lemon Squeezy API and webhook-based state sync remain correct regardless.
 
+## MCP Server
+
+The package includes a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that lets AI assistants (Claude, Cursor, etc.) interact with your Lemon Squeezy store directly.
+
+### Installation
+
+The MCP SDK is an optional peer dependency:
+
+```bash
+npm install @modelcontextprotocol/sdk
+```
+
+### Programmatic Usage
+
+```ts
+import { createLemonSqueezyMcpServer } from "better-auth-lemonsqueezy/mcp";
+
+const { start } = createLemonSqueezyMcpServer({
+  apiKey: process.env.LEMONSQUEEZY_API_KEY!,
+  storeId: process.env.LEMONSQUEEZY_STORE_ID, // optional, used as default filter
+  auditLog: true, // default: true — logs all tool invocations
+});
+
+start(); // connects via stdio transport
+```
+
+### Running with Claude Desktop
+
+Add this to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+
+```json
+{
+  "mcpServers": {
+    "lemonsqueezy": {
+      "command": "npx",
+      "args": ["tsx", "scripts/mcp-dev.ts"],
+      "cwd": "/path/to/better-auth-lemonsqueezy",
+      "env": {
+        "LEMONSQUEEZY_API_KEY": "your_api_key_here",
+        "LEMONSQUEEZY_STORE_ID": "your_store_id"
+      }
+    }
+  }
+}
+```
+
+### Available MCP Tools
+
+| Tool | Description |
+| --- | --- |
+| `get_user` | Get the authenticated Lemon Squeezy user |
+| `list_stores` | List all stores |
+| `get_store` | Get a store by ID |
+| `list_products` | List products (filterable by store) |
+| `get_product` | Get a product by ID |
+| `get_product_variants` | Get all variants for a product |
+| `list_orders` | List orders (filterable by store) |
+| `get_order` | Get an order by ID |
+| `list_customers` | List customers (filterable by store) |
+| `get_customer` | Get a customer by ID |
+| `list_subscriptions` | List subscriptions (filterable by store) |
+| `get_subscription` | Get a subscription by ID |
+| `list_license_keys` | List license keys (filterable by store) |
+| `get_license_key` | Get a license key by ID |
+| `create_checkout` | Create a checkout session |
+| `create_webhook` | Create a webhook |
+| `list_webhooks` | List webhooks (filterable by store) |
+
+### MCP Resources
+
+- **`audit://lemonsqueezy-operations`** — In-memory log of all tool invocations during the current session (when `auditLog` is enabled).
+
+### Testing with MCP Inspector
+
+```bash
+LEMONSQUEEZY_API_KEY=your_key npx @modelcontextprotocol/inspector npx tsx scripts/mcp-dev.ts
+```
+
 ## Database Tables
 
 The plugin creates two tables managed by Better Auth's migration system:

@@ -1,0 +1,62 @@
+name: E2E Tests
+
+on:
+  schedule:
+    # Run weekly on Mondays at 06:00 UTC
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-tests
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: E2E Tests (Lemon Squeezy Test Mode)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Install cloudflared
+        run: |
+          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
+          sudo dpkg -i cloudflared.deb
+          rm cloudflared.deb
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+        env:
+          E2E_LS_API_KEY: ${{ secrets.E2E_LS_API_KEY }}
+          E2E_LS_STORE_ID: ${{ secrets.E2E_LS_STORE_ID }}
+          E2E_LS_WEBHOOK_SECRET: ${{ secrets.E2E_LS_WEBHOOK_SECRET }}
+          E2E_LS_PRO_PRODUCT_ID: ${{ secrets.E2E_LS_PRO_PRODUCT_ID }}
+          E2E_LS_PRO_MONTHLY_VARIANT_ID: ${{ secrets.E2E_LS_PRO_MONTHLY_VARIANT_ID }}
+          E2E_LS_PRO_ANNUAL_VARIANT_ID: ${{ secrets.E2E_LS_PRO_ANNUAL_VARIANT_ID }}
+          E2E_LS_ENTERPRISE_PRODUCT_ID: ${{ secrets.E2E_LS_ENTERPRISE_PRODUCT_ID }}
+          E2E_LS_ENTERPRISE_MONTHLY_VARIANT_ID: ${{ secrets.E2E_LS_ENTERPRISE_MONTHLY_VARIANT_ID }}
+          E2E_LS_ENTERPRISE_ANNUAL_VARIANT_ID: ${{ secrets.E2E_LS_ENTERPRISE_ANNUAL_VARIANT_ID }}
+          E2E_HEADLESS: "true"
+
+      - name: Upload failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-screenshots
+          path: e2e/screenshots/
+          retention-days: 14
+          if-no-files-found: ignore

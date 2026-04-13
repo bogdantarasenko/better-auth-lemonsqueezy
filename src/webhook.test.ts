@@ -18,7 +18,7 @@ const TEST_SECRET = "test-webhook-secret";
 const defaultOptions: LemonSqueezyOptions = {
 	apiKey: "test-api-key",
 	storeId: "store_123",
-	webhookSecret: TEST_SECRET,
+	webhookSigningSecret: TEST_SECRET,
 	subscription: {
 		enabled: true,
 		plans: [

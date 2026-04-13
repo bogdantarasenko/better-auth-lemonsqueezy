@@ -35,9 +35,9 @@ export async function startServer(tunnelUrl: string): Promise<string> {
 		},
 		plugins: [
 			lemonSqueezy({
-				apiKey: env.E2E_LS_API_KEY,
-				storeId: env.E2E_LS_STORE_ID,
-				webhookSecret: env.E2E_LS_WEBHOOK_SECRET,
+				apiKey: env.LEMONSQUEEZY_API_KEY,
+				storeId: env.LEMONSQUEEZY_STORE_ID,
+				webhookSigningSecret: env.LEMONSQUEEZY_WEBHOOK_SIGNING_SECRET,
 				createCustomerOnSignUp: true,
 				defaultSuccessUrl: `${tunnelUrl}/success`,
 				defaultCancelUrl: `${tunnelUrl}/cancel`,
@@ -47,18 +47,18 @@ export async function startServer(tunnelUrl: string): Promise<string> {
 					plans: [
 						{
 							name: "pro",
-							productId: env.E2E_LS_PRO_PRODUCT_ID,
+							productId: env.LEMONSQUEEZY_PRO_PRODUCT_ID,
 							intervals: {
-								monthly: env.E2E_LS_PRO_MONTHLY_VARIANT_ID,
-								annual: env.E2E_LS_PRO_ANNUAL_VARIANT_ID,
+								monthly: env.LEMONSQUEEZY_PRO_MONTHLY_VARIANT_ID,
+								annual: env.LEMONSQUEEZY_PRO_ANNUAL_VARIANT_ID,
 							},
 						},
 						{
-							name: "enterprise",
-							productId: env.E2E_LS_ENTERPRISE_PRODUCT_ID,
+							name: "max",
+							productId: env.LEMONSQUEEZY_MAX_PRODUCT_ID,
 							intervals: {
-								monthly: env.E2E_LS_ENTERPRISE_MONTHLY_VARIANT_ID,
-								annual: env.E2E_LS_ENTERPRISE_ANNUAL_VARIANT_ID,
+								monthly: env.LEMONSQUEEZY_MAX_MONTHLY_VARIANT_ID,
+								annual: env.LEMONSQUEEZY_MAX_ANNUAL_VARIANT_ID,
 							},
 						},
 					],

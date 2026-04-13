@@ -239,8 +239,8 @@ describe("Suite 3: Checkout & Subscription Creation (Playwright)", () => {
 			expect(row.interval).toBe("monthly");
 			expect(row.lsSubscriptionId).toBeTruthy();
 			expect(row.lsCustomerId).toBeTruthy();
-			expect(row.variantId).toBe(env.E2E_LS_PRO_MONTHLY_VARIANT_ID);
-			expect(row.productId).toBe(env.E2E_LS_PRO_PRODUCT_ID);
+			expect(row.variantId).toBe(env.LEMONSQUEEZY_PRO_MONTHLY_VARIANT_ID);
+			expect(row.productId).toBe(env.LEMONSQUEEZY_PRO_PRODUCT_ID);
 
 			ctx.proSubscriptionId = row.id as string;
 			ctx.proLsSubscriptionId = row.lsSubscriptionId as string;
@@ -284,8 +284,8 @@ describe("Suite 3: Checkout & Subscription Creation (Playwright)", () => {
 		expect(sub.interval).toBe("monthly");
 		expect(sub.status).toBe("active");
 		expect(sub.userId).toBe(ctx.testUser.id);
-		expect(sub.variantId).toBe(env.E2E_LS_PRO_MONTHLY_VARIANT_ID);
-		expect(sub.productId).toBe(env.E2E_LS_PRO_PRODUCT_ID);
+		expect(sub.variantId).toBe(env.LEMONSQUEEZY_PRO_MONTHLY_VARIANT_ID);
+		expect(sub.productId).toBe(env.LEMONSQUEEZY_PRO_PRODUCT_ID);
 	});
 
 	it("3.6 — Duplicate checkout is blocked for same plan", async () => {
@@ -301,12 +301,12 @@ describe("Suite 3: Checkout & Subscription Creation (Playwright)", () => {
 		expect(data.code).toBe("already_subscribed");
 	});
 
-	it("3.7 — Create and complete checkout (annual enterprise)", async () => {
+	it("3.7 — Create and complete checkout (annual max)", async () => {
 		expect(ctx.testUser.sessionToken).toBeTruthy();
 
 		const { status, data } = await apiCall("/lemonsqueezy/subscription/create", {
 			method: "POST",
-			body: { plan: "enterprise", interval: "annual" },
+			body: { plan: "max", interval: "annual" },
 			sessionToken: ctx.testUser.sessionToken,
 		});
 
@@ -322,32 +322,32 @@ describe("Suite 3: Checkout & Subscription Creation (Playwright)", () => {
 			expiry: "12/30",
 			cvc: "123",
 			name: "E2E Test User",
-			screenshotName: "checkout-enterprise-annual-failure",
+			screenshotName: "checkout-max-annual-failure",
 		});
 	});
 
-	it("3.8 — Webhook creates second subscription (enterprise annual)", async () => {
+	it("3.8 — Webhook creates second subscription (max annual)", async () => {
 		const db = new Database(DB_PATH, { readonly: true });
 		try {
 			const row = await poll(
 				async () => {
 					return db
 						.prepare("SELECT * FROM lsSubscription WHERE userId = ? AND planName = ?")
-						.get(ctx.testUser.id, "enterprise") as Record<string, unknown> | undefined;
+						.get(ctx.testUser.id, "max") as Record<string, unknown> | undefined;
 				},
-				{ timeoutMs: 30_000, intervalMs: 1_000, label: "enterprise subscription in DB" },
+				{ timeoutMs: 30_000, intervalMs: 1_000, label: "max subscription in DB" },
 			);
 
 			expect(row).toBeTruthy();
 			expect(row.status).toBe("active");
-			expect(row.planName).toBe("enterprise");
+			expect(row.planName).toBe("max");
 			expect(row.interval).toBe("annual");
 			expect(row.lsSubscriptionId).toBeTruthy();
-			expect(row.variantId).toBe(env.E2E_LS_ENTERPRISE_ANNUAL_VARIANT_ID);
-			expect(row.productId).toBe(env.E2E_LS_ENTERPRISE_PRODUCT_ID);
+			expect(row.variantId).toBe(env.LEMONSQUEEZY_MAX_ANNUAL_VARIANT_ID);
+			expect(row.productId).toBe(env.LEMONSQUEEZY_MAX_PRODUCT_ID);
 
-			ctx.enterpriseSubscriptionId = row.id as string;
-			ctx.enterpriseLsSubscriptionId = row.lsSubscriptionId as string;
+			ctx.maxSubscriptionId = row.id as string;
+			ctx.maxLsSubscriptionId = row.lsSubscriptionId as string;
 		} finally {
 			db.close();
 		}

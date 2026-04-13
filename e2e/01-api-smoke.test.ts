@@ -19,7 +19,7 @@ describe("Suite 1: API Smoke Tests", () => {
 	const env = getEnv();
 
 	it("1.1 — API key is valid", async () => {
-		const res = await lsApi("/users/me", env.E2E_LS_API_KEY);
+		const res = await lsApi("/users/me", env.LEMONSQUEEZY_API_KEY);
 		expect(res.status).toBe(200);
 
 		const body = await res.json();
@@ -29,41 +29,41 @@ describe("Suite 1: API Smoke Tests", () => {
 
 	it("1.2 — Test store exists", async () => {
 		const res = await lsApi(
-			`/stores/${env.E2E_LS_STORE_ID}`,
-			env.E2E_LS_API_KEY,
+			`/stores/${env.LEMONSQUEEZY_STORE_ID}`,
+			env.LEMONSQUEEZY_API_KEY,
 		);
 		expect(res.status).toBe(200);
 
 		const body = await res.json();
-		expect(body.data.id).toBe(env.E2E_LS_STORE_ID);
+		expect(body.data.id).toBe(env.LEMONSQUEEZY_STORE_ID);
 	});
 
 	it("1.3 — Pro product exists", async () => {
 		const res = await lsApi(
-			`/products/${env.E2E_LS_PRO_PRODUCT_ID}`,
-			env.E2E_LS_API_KEY,
+			`/products/${env.LEMONSQUEEZY_PRO_PRODUCT_ID}`,
+			env.LEMONSQUEEZY_API_KEY,
 		);
 		expect(res.status).toBe(200);
 
 		const body = await res.json();
-		expect(body.data.id).toBe(env.E2E_LS_PRO_PRODUCT_ID);
+		expect(body.data.id).toBe(env.LEMONSQUEEZY_PRO_PRODUCT_ID);
 	});
 
-	it("1.4 — Enterprise product exists", async () => {
+	it("1.4 — Max product exists", async () => {
 		const res = await lsApi(
-			`/products/${env.E2E_LS_ENTERPRISE_PRODUCT_ID}`,
-			env.E2E_LS_API_KEY,
+			`/products/${env.LEMONSQUEEZY_MAX_PRODUCT_ID}`,
+			env.LEMONSQUEEZY_API_KEY,
 		);
 		expect(res.status).toBe(200);
 
 		const body = await res.json();
-		expect(body.data.id).toBe(env.E2E_LS_ENTERPRISE_PRODUCT_ID);
+		expect(body.data.id).toBe(env.LEMONSQUEEZY_MAX_PRODUCT_ID);
 	});
 
 	it("1.5 — Pro variants exist (monthly + annual)", async () => {
 		const res = await lsApi(
-			`/variants?filter[product_id]=${env.E2E_LS_PRO_PRODUCT_ID}`,
-			env.E2E_LS_API_KEY,
+			`/variants?filter[product_id]=${env.LEMONSQUEEZY_PRO_PRODUCT_ID}`,
+			env.LEMONSQUEEZY_API_KEY,
 		);
 		expect(res.status).toBe(200);
 
@@ -72,14 +72,14 @@ describe("Suite 1: API Smoke Tests", () => {
 			(v: { id: string }) => v.id,
 		);
 
-		expect(variantIds).toContain(env.E2E_LS_PRO_MONTHLY_VARIANT_ID);
-		expect(variantIds).toContain(env.E2E_LS_PRO_ANNUAL_VARIANT_ID);
+		expect(variantIds).toContain(env.LEMONSQUEEZY_PRO_MONTHLY_VARIANT_ID);
+		expect(variantIds).toContain(env.LEMONSQUEEZY_PRO_ANNUAL_VARIANT_ID);
 	});
 
-	it("1.6 — Enterprise variants exist (monthly + annual)", async () => {
+	it("1.6 — Max variants exist (monthly + annual)", async () => {
 		const res = await lsApi(
-			`/variants?filter[product_id]=${env.E2E_LS_ENTERPRISE_PRODUCT_ID}`,
-			env.E2E_LS_API_KEY,
+			`/variants?filter[product_id]=${env.LEMONSQUEEZY_MAX_PRODUCT_ID}`,
+			env.LEMONSQUEEZY_API_KEY,
 		);
 		expect(res.status).toBe(200);
 
@@ -88,8 +88,8 @@ describe("Suite 1: API Smoke Tests", () => {
 			(v: { id: string }) => v.id,
 		);
 
-		expect(variantIds).toContain(env.E2E_LS_ENTERPRISE_MONTHLY_VARIANT_ID);
-		expect(variantIds).toContain(env.E2E_LS_ENTERPRISE_ANNUAL_VARIANT_ID);
+		expect(variantIds).toContain(env.LEMONSQUEEZY_MAX_MONTHLY_VARIANT_ID);
+		expect(variantIds).toContain(env.LEMONSQUEEZY_MAX_ANNUAL_VARIANT_ID);
 	});
 
 	it("1.7 — Webhook endpoint is reachable via tunnel", async () => {

@@ -22,8 +22,8 @@ describe("Suite 8: MCP Tools", () => {
 
 	beforeAll(async () => {
 		const { server } = createLemonSqueezyMcpServer({
-			apiKey: env.E2E_LS_API_KEY,
-			storeId: env.E2E_LS_STORE_ID,
+			apiKey: env.LEMONSQUEEZY_API_KEY,
+			storeId: env.LEMONSQUEEZY_STORE_ID,
 			auditLog: true,
 		});
 
@@ -76,15 +76,15 @@ describe("Suite 8: MCP Tools", () => {
 		expect(data.data.length).toBeGreaterThanOrEqual(1);
 
 		const storeIds = data.data.map((s: { id: string }) => s.id);
-		expect(storeIds).toContain(env.E2E_LS_STORE_ID);
+		expect(storeIds).toContain(env.LEMONSQUEEZY_STORE_ID);
 	});
 
 	it("8.3 — get_store returns test store by ID", async () => {
 		const data = await callTool("get_store", {
-			store_id: env.E2E_LS_STORE_ID,
+			store_id: env.LEMONSQUEEZY_STORE_ID,
 		});
 		expect(data.data).toBeDefined();
-		expect(data.data.id).toBe(env.E2E_LS_STORE_ID);
+		expect(data.data.id).toBe(env.LEMONSQUEEZY_STORE_ID);
 		expect(data.data.attributes.name).toBeTruthy();
 	});
 
@@ -92,43 +92,43 @@ describe("Suite 8: MCP Tools", () => {
 
 	it("8.4 — list_products returns products filtered by store", async () => {
 		const data = await callTool("list_products", {
-			store_id: env.E2E_LS_STORE_ID,
+			store_id: env.LEMONSQUEEZY_STORE_ID,
 		});
 		expect(data.data).toBeDefined();
 		expect(Array.isArray(data.data)).toBe(true);
 		expect(data.data.length).toBeGreaterThanOrEqual(2);
 
 		const productIds = data.data.map((p: { id: string }) => p.id);
-		expect(productIds).toContain(env.E2E_LS_PRO_PRODUCT_ID);
-		expect(productIds).toContain(env.E2E_LS_ENTERPRISE_PRODUCT_ID);
+		expect(productIds).toContain(env.LEMONSQUEEZY_PRO_PRODUCT_ID);
+		expect(productIds).toContain(env.LEMONSQUEEZY_MAX_PRODUCT_ID);
 	});
 
 	it("8.5 — get_product returns pro product by ID", async () => {
 		const data = await callTool("get_product", {
-			product_id: env.E2E_LS_PRO_PRODUCT_ID,
+			product_id: env.LEMONSQUEEZY_PRO_PRODUCT_ID,
 		});
 		expect(data.data).toBeDefined();
-		expect(data.data.id).toBe(env.E2E_LS_PRO_PRODUCT_ID);
+		expect(data.data.id).toBe(env.LEMONSQUEEZY_PRO_PRODUCT_ID);
 		expect(data.data.attributes.name).toBeTruthy();
 	});
 
 	it("8.6 — get_product_variants returns variants for pro product", async () => {
 		const data = await callTool("get_product_variants", {
-			product_id: env.E2E_LS_PRO_PRODUCT_ID,
+			product_id: env.LEMONSQUEEZY_PRO_PRODUCT_ID,
 		});
 		expect(data.data).toBeDefined();
 		expect(Array.isArray(data.data)).toBe(true);
 
 		const variantIds = data.data.map((v: { id: string }) => v.id);
-		expect(variantIds).toContain(env.E2E_LS_PRO_MONTHLY_VARIANT_ID);
-		expect(variantIds).toContain(env.E2E_LS_PRO_ANNUAL_VARIANT_ID);
+		expect(variantIds).toContain(env.LEMONSQUEEZY_PRO_MONTHLY_VARIANT_ID);
+		expect(variantIds).toContain(env.LEMONSQUEEZY_PRO_ANNUAL_VARIANT_ID);
 	});
 
 	// ── Orders & Customers ─────────────────────────────────────
 
 	it("8.7 — list_orders returns orders", async () => {
 		const data = await callTool("list_orders", {
-			store_id: env.E2E_LS_STORE_ID,
+			store_id: env.LEMONSQUEEZY_STORE_ID,
 		});
 		expect(data.data).toBeDefined();
 		expect(Array.isArray(data.data)).toBe(true);
@@ -153,7 +153,7 @@ describe("Suite 8: MCP Tools", () => {
 
 	it("8.9 — list_customers returns customers", async () => {
 		const data = await callTool("list_customers", {
-			store_id: env.E2E_LS_STORE_ID,
+			store_id: env.LEMONSQUEEZY_STORE_ID,
 		});
 		expect(data.data).toBeDefined();
 		expect(Array.isArray(data.data)).toBe(true);
@@ -181,7 +181,7 @@ describe("Suite 8: MCP Tools", () => {
 
 	it("8.11 — list_subscriptions returns subscriptions", async () => {
 		const data = await callTool("list_subscriptions", {
-			store_id: env.E2E_LS_STORE_ID,
+			store_id: env.LEMONSQUEEZY_STORE_ID,
 		});
 		expect(data.data).toBeDefined();
 		expect(Array.isArray(data.data)).toBe(true);
@@ -207,7 +207,7 @@ describe("Suite 8: MCP Tools", () => {
 
 	it("8.13 — list_license_keys returns license keys (may be empty)", async () => {
 		const data = await callTool("list_license_keys", {
-			store_id: env.E2E_LS_STORE_ID,
+			store_id: env.LEMONSQUEEZY_STORE_ID,
 		});
 		expect(data.data).toBeDefined();
 		expect(Array.isArray(data.data)).toBe(true);
@@ -218,7 +218,7 @@ describe("Suite 8: MCP Tools", () => {
 
 	it("8.14 — list_webhooks returns configured webhooks", async () => {
 		const data = await callTool("list_webhooks", {
-			store_id: env.E2E_LS_STORE_ID,
+			store_id: env.LEMONSQUEEZY_STORE_ID,
 		});
 		expect(data.data).toBeDefined();
 		expect(Array.isArray(data.data)).toBe(true);
@@ -238,13 +238,13 @@ describe("Suite 8: MCP Tools", () => {
 					store: {
 						data: {
 							type: "stores",
-							id: env.E2E_LS_STORE_ID,
+							id: env.LEMONSQUEEZY_STORE_ID,
 						},
 					},
 					variant: {
 						data: {
 							type: "variants",
-							id: env.E2E_LS_PRO_MONTHLY_VARIANT_ID,
+							id: env.LEMONSQUEEZY_PRO_MONTHLY_VARIANT_ID,
 						},
 					},
 				},
@@ -269,7 +269,7 @@ describe("Suite 8: MCP Tools", () => {
 						store: {
 							data: {
 								type: "stores",
-								id: env.E2E_LS_STORE_ID,
+								id: env.LEMONSQUEEZY_STORE_ID,
 							},
 						},
 					},

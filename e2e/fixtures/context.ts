@@ -11,8 +11,8 @@ export interface E2EContext {
 	lsCustomerId?: string;
 	proSubscriptionId?: string;
 	proLsSubscriptionId?: string;
-	enterpriseSubscriptionId?: string;
-	enterpriseLsSubscriptionId?: string;
+	maxSubscriptionId?: string;
+	maxLsSubscriptionId?: string;
 	orderId?: string;
 }
 

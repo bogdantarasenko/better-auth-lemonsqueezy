@@ -90,7 +90,7 @@ describe("Suite 5: Webhook Verification", () => {
 
 	it("5.3 — Malformed body is rejected", async () => {
 		const malformedBody = "this is not valid JSON {{{";
-		const validSignature = sign(malformedBody, env.E2E_LS_WEBHOOK_SECRET);
+		const validSignature = sign(malformedBody, env.LEMONSQUEEZY_WEBHOOK_SIGNING_SECRET);
 
 		const { status, data } = await sendWebhook(malformedBody, {
 			"X-Signature": validSignature,
@@ -102,7 +102,7 @@ describe("Suite 5: Webhook Verification", () => {
 
 	it("5.4 — Unknown event type is handled gracefully", async () => {
 		const body = buildPayload("order_created");
-		const validSignature = sign(body, env.E2E_LS_WEBHOOK_SECRET);
+		const validSignature = sign(body, env.LEMONSQUEEZY_WEBHOOK_SIGNING_SECRET);
 
 		const { status, data } = await sendWebhook(body, {
 			"X-Signature": validSignature,

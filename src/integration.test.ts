@@ -12,7 +12,7 @@ const WEBHOOK_SECRET = "test-webhook-secret-integration";
 const lsOptions: LemonSqueezyOptions = {
 	apiKey: "test-api-key",
 	storeId: "store_123",
-	webhookSecret: WEBHOOK_SECRET,
+	webhookSigningSecret: WEBHOOK_SECRET,
 	createCustomerOnSignUp: true,
 	defaultSuccessUrl: "https://example.com/success",
 	defaultCancelUrl: "https://example.com/cancel",

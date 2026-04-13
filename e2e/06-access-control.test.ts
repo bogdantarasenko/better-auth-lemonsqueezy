@@ -40,7 +40,7 @@ describe("Suite 6: Access Control", () => {
 	});
 
 	it("6.1 — hasActiveSubscription returns true for user with active subscription", async () => {
-		// testUser created subscriptions in Suite 3 (pro + enterprise)
+		// testUser created subscriptions in Suite 3 (pro + max)
 		const result = await helpers.hasActiveSubscription(ctx.testUser.id);
 		expect(result).toBe(true);
 	});

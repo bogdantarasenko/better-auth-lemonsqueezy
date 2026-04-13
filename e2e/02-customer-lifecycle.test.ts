@@ -75,7 +75,7 @@ describe("Suite 2: Customer Lifecycle", () => {
 		// Verify customer exists in Lemon Squeezy API
 		const lsRes = await lsApi(
 			`/customers/${lsCustomerId}`,
-			env.E2E_LS_API_KEY,
+			env.LEMONSQUEEZY_API_KEY,
 		);
 		expect(lsRes.status).toBe(200);
 
@@ -112,7 +112,7 @@ describe("Suite 2: Customer Lifecycle", () => {
 		// Verify LS API customer attributes match
 		const lsRes = await lsApi(
 			`/customers/${lsCustomerId}`,
-			env.E2E_LS_API_KEY,
+			env.LEMONSQUEEZY_API_KEY,
 		);
 		expect(lsRes.status).toBe(200);
 
@@ -121,7 +121,7 @@ describe("Suite 2: Customer Lifecycle", () => {
 		expect(attrs.email).toBe(TEST_EMAIL);
 		expect(attrs.name).toBe(TEST_NAME);
 		expect(lsBody.data.attributes.store_id).toBe(
-			Number(env.E2E_LS_STORE_ID),
+			Number(env.LEMONSQUEEZY_STORE_ID),
 		);
 	});
 

@@ -78,18 +78,18 @@ describe("Suite 4: Subscription Management", () => {
 		expect(data.subscription.status).toBe("active");
 		expect(data.subscription.planName).toBe("pro");
 		expect(data.subscription.interval).toBe("monthly");
-		expect(data.subscription.variantId).toBe(env.E2E_LS_PRO_MONTHLY_VARIANT_ID);
-		expect(data.subscription.productId).toBe(env.E2E_LS_PRO_PRODUCT_ID);
+		expect(data.subscription.variantId).toBe(env.LEMONSQUEEZY_PRO_MONTHLY_VARIANT_ID);
+		expect(data.subscription.productId).toBe(env.LEMONSQUEEZY_PRO_PRODUCT_ID);
 	});
 
-	it("4.3 — Update subscription (change plan to enterprise)", async () => {
+	it("4.3 — Update subscription (change plan to max)", async () => {
 		expect(ctx.proLsSubscriptionId).toBeTruthy();
 
 		const { status, data } = await apiCall("/lemonsqueezy/subscription/update", {
 			method: "POST",
 			body: {
 				subscriptionId: ctx.proLsSubscriptionId,
-				plan: "enterprise",
+				plan: "max",
 				interval: "monthly",
 			},
 			sessionToken: ctx.testUser.sessionToken,
@@ -108,8 +108,8 @@ describe("Suite 4: Subscription Management", () => {
 						.prepare("SELECT * FROM lsSubscription WHERE lsSubscriptionId = ?")
 						.get(ctx.proLsSubscriptionId) as Record<string, unknown> | undefined;
 
-					// Wait until the variant has actually changed to the enterprise monthly variant
-					if (sub && sub.variantId === env.E2E_LS_ENTERPRISE_MONTHLY_VARIANT_ID) {
+					// Wait until the variant has actually changed to the max monthly variant
+					if (sub && sub.variantId === env.LEMONSQUEEZY_MAX_MONTHLY_VARIANT_ID) {
 						return sub;
 					}
 					return undefined;
@@ -118,9 +118,9 @@ describe("Suite 4: Subscription Management", () => {
 			);
 
 			expect(row).toBeTruthy();
-			expect(row.variantId).toBe(env.E2E_LS_ENTERPRISE_MONTHLY_VARIANT_ID);
-			expect(row.productId).toBe(env.E2E_LS_ENTERPRISE_PRODUCT_ID);
-			expect(row.planName).toBe("enterprise");
+			expect(row.variantId).toBe(env.LEMONSQUEEZY_MAX_MONTHLY_VARIANT_ID);
+			expect(row.productId).toBe(env.LEMONSQUEEZY_MAX_PRODUCT_ID);
+			expect(row.planName).toBe("max");
 		} finally {
 			db.close();
 		}

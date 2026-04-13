@@ -186,7 +186,7 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 			const isValid = await verifyWebhookSignature(
 				rawBody,
 				signature,
-				options.webhookSecret,
+				options.webhookSigningSecret,
 			);
 			if (!isValid) {
 				return {

@@ -43,6 +43,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "vitest run --config vitest.config.e2e.ts",
     "mcp-server": "npx tsx scripts/mcp-dev.ts"
   },
   "peerDependencies": {

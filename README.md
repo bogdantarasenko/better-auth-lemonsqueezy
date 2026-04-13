@@ -270,12 +270,16 @@ start(); // connects via stdio transport
 
 ### Running the MCP Server
 
-```bash
-# Set your env vars first
-export LEMONSQUEEZY_API_KEY=your_api_key_here
-export LEMONSQUEEZY_STORE_ID=your_store_id  # optional
+After installing the package, run the MCP server with:
 
-npm run mcp-server
+```bash
+LEMONSQUEEZY_API_KEY=your_api_key_here npx better-auth-lemonsqueezy-mcp
+```
+
+Or with an optional store ID filter:
+
+```bash
+LEMONSQUEEZY_API_KEY=your_key LEMONSQUEEZY_STORE_ID=your_store_id npx better-auth-lemonsqueezy-mcp
 ```
 
 ### Using with Claude Code
@@ -286,9 +290,8 @@ Add the MCP server to your Claude Code config (`.claude/settings.json` or `~/.cl
 {
   "mcpServers": {
     "lemonsqueezy": {
-      "command": "npm",
-      "args": ["run", "mcp-server"],
-      "cwd": "/path/to/better-auth-lemonsqueezy",
+      "command": "npx",
+      "args": ["better-auth-lemonsqueezy-mcp"],
       "env": {
         "LEMONSQUEEZY_API_KEY": "your_api_key_here",
         "LEMONSQUEEZY_STORE_ID": "your_store_id"
@@ -327,7 +330,7 @@ Add the MCP server to your Claude Code config (`.claude/settings.json` or `~/.cl
 ### Testing with MCP Inspector
 
 ```bash
-LEMONSQUEEZY_API_KEY=your_key npx @modelcontextprotocol/inspector npx tsx scripts/mcp-dev.ts
+LEMONSQUEEZY_API_KEY=your_key npx @modelcontextprotocol/inspector npx better-auth-lemonsqueezy-mcp
 ```
 
 ## Database Tables

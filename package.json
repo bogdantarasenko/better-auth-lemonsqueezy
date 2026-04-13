@@ -35,6 +35,9 @@
       }
     }
   },
+  "bin": {
+    "better-auth-lemonsqueezy-mcp": "./dist/mcp/cli.js"
+  },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
@@ -73,5 +76,5 @@
     "lemon-squeezy",
     "subscription",
     "payments"
-  ],
+  ]
 }

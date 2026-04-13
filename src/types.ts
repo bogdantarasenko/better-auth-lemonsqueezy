@@ -55,7 +55,7 @@ export interface LemonSqueezyOptions {
 	/** Lemon Squeezy store ID */
 	storeId: string;
 	/** Webhook signing secret for signature verification */
-	webhookSecret: string;
+	webhookSigningSecret: string;
 	/** Automatically create a Lemon Squeezy customer on user sign-up */
 	createCustomerOnSignUp?: boolean;
 	/** Callback after customer creation */

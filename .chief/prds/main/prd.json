@@ -1,0 +1,119 @@
+{
+  "project": "End-to-End Tests with Lemon Squeezy Test Mode API",
+  "description": "Add a comprehensive end-to-end test suite for better-auth-lemonsqueezy that runs against the real Lemon Squeezy API in test mode. Tests will validate the full plugin lifecycle — from customer creation through checkout completion (via Playwright) to webhook processing and subscription management — without mocking any external API calls.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "E2E Test Infrastructure Setup",
+      "description": "As a developer, I want the e2e test infrastructure (server, tunnel, Vitest config) set up, so that I can run e2e tests locally and in CI.",
+      "acceptanceCriteria": [
+        "npm run test:e2e starts the test server, tunnel, and runs tests.",
+        ".env.e2e.example documents all required env vars.",
+        "vitest.config.e2e.ts is configured for sequential, single-process execution.",
+        "globalSetup starts server + tunnel; globalTeardown cleans up."
+      ],
+      "priority": 1,
+      "passes": true
+    },
+    {
+      "id": "US-002",
+      "title": "API Smoke Tests",
+      "description": "As a developer, I want smoke tests that verify my LS test store is configured correctly, so that I get a fast failure with a clear message if setup is wrong.",
+      "acceptanceCriteria": [
+        "Tests 1.1–1.7 pass.",
+        "Clear error messages if env vars are missing or API key is invalid."
+      ],
+      "priority": 2,
+      "passes": true
+    },
+    {
+      "id": "US-003",
+      "title": "Customer Lifecycle Tests",
+      "description": "As a developer, I want tests that create real LS customers via the plugin, so that I know the customer creation flow works against the real API.",
+      "acceptanceCriteria": [
+        "Tests 2.1–2.3 pass.",
+        "Customer exists in both local DB and LS API."
+      ],
+      "priority": 3,
+      "passes": true
+    },
+    {
+      "id": "US-004",
+      "title": "Playwright Checkout Flow",
+      "description": "As a developer, I want Playwright to complete the LS checkout page, so that I can test the full checkout-to-webhook-to-subscription pipeline.",
+      "acceptanceCriteria": [
+        "Tests 3.1–3.8 pass.",
+        "Checkout page selectors are in e2e/selectors/checkout.ts.",
+        "Screenshots are captured on failure.",
+        "Test uses card number 4242 4242 4242 4242."
+      ],
+      "priority": 4,
+      "passes": true
+    },
+    {
+      "id": "US-005",
+      "title": "Subscription Management Tests",
+      "description": "As a developer, I want tests that cancel, resume, update, and sync subscriptions against the real API, so that I know these operations work end-to-end.",
+      "acceptanceCriteria": [
+        "Tests 4.1–4.8 pass.",
+        "Each management action is verified via both API response and webhook-triggered DB update."
+      ],
+      "priority": 5,
+      "passes": true
+    },
+    {
+      "id": "US-006",
+      "title": "Webhook Security Tests",
+      "description": "As a developer, I want tests that verify webhook signature validation works correctly, so that I know the endpoint rejects forged requests.",
+      "acceptanceCriteria": [
+        "Tests 5.1–5.4 pass."
+      ],
+      "priority": 6,
+      "passes": true
+    },
+    {
+      "id": "US-007",
+      "title": "Access Control Tests",
+      "description": "As a developer, I want access control helpers tested against real subscription data, so that I know plan gating works with real LS subscription states.",
+      "acceptanceCriteria": [
+        "Tests 6.1–6.6 pass."
+      ],
+      "priority": 7,
+      "passes": true
+    },
+    {
+      "id": "US-008",
+      "title": "Usage Reporting Tests",
+      "description": "As a developer, I want usage reporting tested against the real API, so that I know metered billing works.",
+      "acceptanceCriteria": [
+        "Tests 7.1–7.3 pass (or suite is skipped if products are not usage-based)."
+      ],
+      "priority": 8,
+      "passes": true
+    },
+    {
+      "id": "US-009",
+      "title": "MCP Tool Tests",
+      "description": "As a developer, I want every MCP tool tested against the real API, so that I know the MCP server returns valid data.",
+      "acceptanceCriteria": [
+        "Tests 8.1–8.17 pass.",
+        "Audit log resource contains entries from previous tool calls."
+      ],
+      "priority": 9,
+      "passes": true
+    },
+    {
+      "id": "US-010",
+      "title": "CI/CD Pipeline",
+      "description": "As a developer, I want e2e tests running in GitHub Actions on a schedule, so that I catch LS API changes without manual effort.",
+      "acceptanceCriteria": [
+        ".github/workflows/e2e.yml is configured.",
+        "Tests run weekly and on manual dispatch.",
+        "All secrets are configured in the repo.",
+        "Test results are visible in the Actions tab."
+      ],
+      "priority": 10,
+      "passes": true
+    }
+  ]
+}

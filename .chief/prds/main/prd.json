@@ -113,7 +113,7 @@
         "Test results are visible in the Actions tab."
       ],
       "priority": 10,
-      "passes": false
+      "passes": true
     }
   ]
 }

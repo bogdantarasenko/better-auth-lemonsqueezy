@@ -144,3 +144,14 @@
   - `client.readResource({ uri: "audit://..." })` reads MCP resources; returns `{ contents: [{ text }] }`
   - Audit log entries accumulate in-memory during the MCP session — test 8.17 verifies all 16 prior tool calls are logged
 ---
+
+## 2026-04-13 - US-010
+- What was implemented: GitHub Actions CI/CD pipeline for e2e tests — weekly schedule (Mondays 06:00 UTC), manual dispatch, all LS secrets passed as env vars, Playwright + cloudflared installation, failure screenshot uploads
+- Files changed:
+  - `.github/workflows/e2e.yml` — complete e2e workflow with Node 20, npm cache, Playwright Chromium install, cloudflared install, secret-backed env vars, artifact upload on failure
+- **Learnings for future iterations:**
+  - `npx playwright install chromium --with-deps` installs both the browser and OS-level dependencies (fonts, libs) needed on Ubuntu
+  - cloudflared can be installed on Ubuntu via the `.deb` package from GitHub releases
+  - `concurrency` with `cancel-in-progress: true` prevents multiple e2e runs from conflicting (especially with shared LS test store resources)
+  - Secrets must be configured in the GitHub repo settings: `E2E_LS_API_KEY`, `E2E_LS_STORE_ID`, `E2E_LS_WEBHOOK_SECRET`, plus 6 product/variant IDs
+---

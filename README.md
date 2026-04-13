@@ -270,13 +270,13 @@ start(); // connects via stdio transport
 
 ### Running the MCP Server
 
-After installing the package, run the MCP server with:
+The CLI automatically loads your `.env` file from the current directory, so if your project already has `LEMONSQUEEZY_API_KEY` and `LEMONSQUEEZY_STORE_ID` set there, just run:
 
 ```bash
-LEMONSQUEEZY_API_KEY=your_api_key_here npx better-auth-lemonsqueezy-mcp
+npx better-auth-lemonsqueezy-mcp
 ```
 
-Or with an optional store ID filter:
+Or pass env vars explicitly:
 
 ```bash
 LEMONSQUEEZY_API_KEY=your_key LEMONSQUEEZY_STORE_ID=your_store_id npx better-auth-lemonsqueezy-mcp

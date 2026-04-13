@@ -1,5 +1,17 @@
 #!/usr/bin/env node
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { createLemonSqueezyMcpServer } from "./index.js";
+
+// Auto-load .env file if present in the current working directory
+const envPath = resolve(process.cwd(), ".env");
+if (existsSync(envPath)) {
+	try {
+		process.loadEnvFile(envPath);
+	} catch {
+		// Node < 20.12 or malformed .env — fall through to process.env
+	}
+}
 
 const apiKey = process.env.LEMONSQUEEZY_API_KEY;
 

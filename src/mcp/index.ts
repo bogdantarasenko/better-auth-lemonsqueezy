@@ -5,6 +5,7 @@ import { registerUserAndStoreTools } from "./tools/user-and-stores.js";
 import { registerProductAndVariantTools } from "./tools/products-and-variants.js";
 import { registerOrderAndCustomerTools } from "./tools/orders-and-customers.js";
 import { registerSubscriptionAndLicenseKeyTools } from "./tools/subscriptions-and-license-keys.js";
+import { registerCheckoutAndWebhookTools } from "./tools/checkouts-and-webhooks.js";
 
 export type { LemonSqueezyMcpOptions } from "./types.js";
 
@@ -22,6 +23,7 @@ export function createLemonSqueezyMcpServer(options: LemonSqueezyMcpOptions) {
 	registerProductAndVariantTools(server, options.apiKey, { storeId: options.storeId });
 	registerOrderAndCustomerTools(server, options.apiKey, { storeId: options.storeId });
 	registerSubscriptionAndLicenseKeyTools(server, options.apiKey, { storeId: options.storeId });
+	registerCheckoutAndWebhookTools(server, options.apiKey, { storeId: options.storeId });
 
 	return {
 		server,

@@ -89,7 +89,7 @@
         "Tests 7.1–7.3 pass (or suite is skipped if products are not usage-based)."
       ],
       "priority": 8,
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-009",

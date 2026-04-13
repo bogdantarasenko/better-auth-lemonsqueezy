@@ -118,3 +118,14 @@
   - Suite 4 cancels then resumes the pro subscription, so by Suite 6 the pro subscription is back to active status — no need to worry about stale cancelled state
   - Access control helpers query local `lsSubscription` table only (no LS API calls), making them fast and reliable for e2e tests
 ---
+
+## 2026-04-13 - US-008
+- What was implemented: Usage reporting tests (tests 7.1–7.3) — report usage via HTTP endpoint, zero quantity validation, invalid subscription error handling. Suite auto-skips test 7.1 if no usage-based subscriptions exist (no `subscriptionItemId`).
+- Files changed:
+  - `e2e/07-usage.test.ts` — 3 tests: report usage succeeds (skippable), zero quantity returns 400, invalid subscription returns 404
+- **Learnings for future iterations:**
+  - Usage endpoint is at `POST /api/auth/lemonsqueezy/usage` — requires auth session cookie, body `{ subscriptionId, quantity }`
+  - Endpoint returns 400 for invalid quantity (`invalid_quantity`), 404 for missing subscription (`subscription_not_found`), 403 for wrong owner (`not_owner`), 400 for no subscription item (`no_subscription_item`)
+  - `subscriptionItemId` is only populated on `subscription_created` webhook when `first_subscription_item.id` is present — non-usage-based products won't have it
+  - Vitest `skip()` from test context (`it("...", ({ skip }) => { skip() })`) cleanly skips individual tests at runtime
+---

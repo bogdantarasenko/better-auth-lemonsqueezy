@@ -3,6 +3,7 @@ import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { z } from "zod";
 import { schema } from "./schema";
 import type { LemonSqueezyOptions } from "./types";
+import { lsFetch } from "./ls-fetch";
 import {
 	verifyWebhookSignature,
 	processWebhookEvent,
@@ -24,67 +25,6 @@ export { createAccessControlHelpers } from "./access-control";
 export { createUsageReporter } from "./usage";
 export { schema } from "./schema";
 
-/** Default timeout for outbound Lemon Squeezy API requests (10 seconds) */
-const LS_API_TIMEOUT = 10_000;
-
-/**
- * Make a fetch request to the Lemon Squeezy API with a 10-second timeout.
- * Handles rate limiting (429) and upstream errors (5xx/network) with structured error responses.
- * Returns { data } on success, or { error, code } on failure.
- */
-async function lsFetch(
-	url: string,
-	init: RequestInit & { headers: Record<string, string> },
-): Promise<{ data?: unknown; error?: string; code?: string; status?: number }> {
-	try {
-		const response = await fetch(url, {
-			...init,
-			signal: AbortSignal.timeout(LS_API_TIMEOUT),
-		});
-
-		if (response.status === 429) {
-			return {
-				error: "Lemon Squeezy API rate limit exceeded",
-				code: "rate_limited",
-				status: 429,
-			};
-		}
-
-		if (!response.ok) {
-			const errorText = await response.text();
-			if (response.status >= 500) {
-				return {
-					error: "Lemon Squeezy upstream service unavailable",
-					code: "upstream_error",
-					status: response.status,
-				};
-			}
-			return {
-				error: `Lemon Squeezy API error: ${response.status} ${errorText}`,
-				code: "upstream_error",
-				status: response.status,
-			};
-		}
-
-		const data = await response.json();
-		return { data };
-	} catch (err) {
-		if (err instanceof DOMException && err.name === "TimeoutError") {
-			return {
-				error: "Lemon Squeezy API request timed out",
-				code: "upstream_error",
-			};
-		}
-		if (err instanceof TypeError) {
-			// Network error
-			return {
-				error: "Lemon Squeezy upstream service unavailable",
-				code: "upstream_error",
-			};
-		}
-		throw err;
-	}
-}
 
 /**
  * Simple per-user rate limiter (best-effort, in-memory).
@@ -296,6 +236,7 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 			};
 		},
 		endpoints: {
+			...(options.subscription?.enabled === false ? {} : {
 			lemonSqueezySubscriptionCreate: createAuthEndpoint(
 				"/lemonsqueezy/subscription/create",
 				{
@@ -491,7 +432,6 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 												email: userEmail,
 												custom: {
 													user_id: userId,
-													customer_id: lsCustomerId,
 												},
 											},
 											product_options: {
@@ -1073,6 +1013,7 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 				},
 			),
 
+		}),
 		...(options.usageEndpoint
 			? {
 					lemonSqueezyUsage: createAuthEndpoint(

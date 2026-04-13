@@ -238,6 +238,10 @@ await reportUsage(userId, subscriptionId, 100);
 
 An HTTP endpoint (`POST /api/auth/lemonsqueezy/usage`) is also available when `usageEndpoint: true` is set, but it is **not recommended** for production use as it allows authenticated users to report arbitrary usage.
 
+## Serverless Environments
+
+The plugin uses in-memory rate limiting, checkout URL caching, and request deduplication. These are **not shared across serverless instances** — each cold start gets a fresh state. In serverless deployments (e.g., AWS Lambda, Vercel Functions), rate limiting will be best-effort only and checkout deduplication may not prevent all duplicate API calls. This is acceptable for most use cases; the Lemon Squeezy API and webhook-based state sync remain correct regardless.
+
 ## Database Tables
 
 The plugin creates two tables managed by Better Auth's migration system:

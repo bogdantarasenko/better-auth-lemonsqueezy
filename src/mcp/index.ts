@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import type { LemonSqueezyMcpOptions } from "./types.js";
 import { registerUserAndStoreTools } from "./tools/user-and-stores.js";
 import { registerProductAndVariantTools } from "./tools/products-and-variants.js";
+import { registerOrderAndCustomerTools } from "./tools/orders-and-customers.js";
 
 export type { LemonSqueezyMcpOptions } from "./types.js";
 
@@ -18,6 +19,7 @@ export function createLemonSqueezyMcpServer(options: LemonSqueezyMcpOptions) {
 
 	registerUserAndStoreTools(server, options.apiKey);
 	registerProductAndVariantTools(server, options.apiKey, { storeId: options.storeId });
+	registerOrderAndCustomerTools(server, options.apiKey, { storeId: options.storeId });
 
 	return {
 		server,

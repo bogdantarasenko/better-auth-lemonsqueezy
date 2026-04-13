@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { LemonSqueezyMcpOptions } from "./types.js";
+import { registerUserAndStoreTools } from "./tools/user-and-stores.js";
 
 export type { LemonSqueezyMcpOptions } from "./types.js";
 
@@ -13,6 +14,8 @@ export function createLemonSqueezyMcpServer(options: LemonSqueezyMcpOptions) {
 	const server = new McpServer(
 		{ name: serverName, version: serverVersion },
 	);
+
+	registerUserAndStoreTools(server, options.apiKey);
 
 	return {
 		server,

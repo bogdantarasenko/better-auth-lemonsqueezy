@@ -268,16 +268,26 @@ const { start } = createLemonSqueezyMcpServer({
 start(); // connects via stdio transport
 ```
 
-### Running with Claude Desktop
+### Running the MCP Server
 
-Add this to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+```bash
+# Set your env vars first
+export LEMONSQUEEZY_API_KEY=your_api_key_here
+export LEMONSQUEEZY_STORE_ID=your_store_id  # optional
+
+npm run mcp-server
+```
+
+### Using with Claude Code
+
+Add the MCP server to your Claude Code config (`.claude/settings.json` or `~/.claude/settings.json`):
 
 ```json
 {
   "mcpServers": {
     "lemonsqueezy": {
-      "command": "npx",
-      "args": ["tsx", "scripts/mcp-dev.ts"],
+      "command": "npm",
+      "args": ["run", "mcp-server"],
       "cwd": "/path/to/better-auth-lemonsqueezy",
       "env": {
         "LEMONSQUEEZY_API_KEY": "your_api_key_here",

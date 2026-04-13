@@ -39,7 +39,8 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "mcp-server": "npx tsx scripts/mcp-dev.ts"
   },
   "peerDependencies": {
     "better-auth": ">=1.2.0",

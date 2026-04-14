@@ -63,11 +63,11 @@ const checkoutLocks = new Map<string, Promise<string>>();
 /** Evict expired entries from the checkout cache (called before each lookup). */
 function pruneCheckoutCache() {
 	const now = Date.now();
-	for (const [key, entry] of checkoutCache) {
+	checkoutCache.forEach((entry, key) => {
 		if (entry.expiresAt <= now) {
 			checkoutCache.delete(key);
 		}
-	}
+	});
 }
 
 /**

@@ -244,7 +244,7 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					use: [sessionMiddleware],
 					body: z.object({
 						plan: z.string(),
-						interval: z.enum(["monthly", "annual"]).optional(),
+						interval: z.string().optional(),
 						successUrl: z.string().optional(),
 						cancelUrl: z.string().optional(),
 					}),
@@ -672,7 +672,7 @@ export const lemonSqueezy = (options: LemonSqueezyOptions) => {
 					body: z.object({
 						subscriptionId: z.string(),
 						plan: z.string(),
-						interval: z.enum(["monthly", "annual"]).optional(),
+						interval: z.string().optional(),
 					}),
 				},
 				async (ctx) => {

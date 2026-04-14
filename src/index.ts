@@ -40,9 +40,9 @@ function checkRateLimit(userId: string): boolean {
 	if (!entry || entry.resetAt <= now) {
 		// Periodically prune expired entries to prevent unbounded growth
 		if (rateLimitMap.size > 10_000) {
-			for (const [key, val] of rateLimitMap) {
+			rateLimitMap.forEach((val, key) => {
 				if (val.resetAt <= now) rateLimitMap.delete(key);
-			}
+			});
 		}
 		rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
 		return true;

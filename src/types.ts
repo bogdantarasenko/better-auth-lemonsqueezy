@@ -3,7 +3,7 @@
  */
 
 /** Billing interval for a subscription plan */
-export type BillingInterval = "monthly" | "annual";
+export type BillingInterval = string;
 
 /** A plan definition mapping intervals to Lemon Squeezy variant IDs */
 export interface LemonSqueezyPlan {
@@ -12,7 +12,7 @@ export interface LemonSqueezyPlan {
 	/** Lemon Squeezy product ID */
 	productId: string;
 	/** Mapping of billing intervals to Lemon Squeezy variant IDs */
-	intervals: Partial<Record<BillingInterval, string>>;
+	intervals: Record<string, string>;
 }
 
 /** Subscription configuration */
